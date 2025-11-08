@@ -1,0 +1,34 @@
+# Java
+*.class
+*.jar
+*.war
+*.ear
+build/
+.gradle/
+out/
+bin/
+target/
+
+# Node
+node_modules/
+npm-debug.log
+package-lock.json
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+
+# Temporal
+*.tmp
+*.temp
