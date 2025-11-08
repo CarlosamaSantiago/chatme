@@ -11,6 +11,7 @@ public class ChatServer {
     private static Map<String, ClientHandler> clientesConectados = new ConcurrentHashMap<>();
     private static Map<String, List<String>> grupos = new ConcurrentHashMap<>();
     private static Map<String, List<String>> historial = new ConcurrentHashMap<>();
+    private static Map<String, String> usuarios = new ConcurrentHashMap<>();
     private ExecutorService pool;
     private static Semaphore semaphore;
 
@@ -62,7 +63,28 @@ public class ChatServer {
         return historial;
     }
 
+    public static Map<String, String> getUsuarios() {
+        return usuarios;
+    }
+
     public static Semaphore getSemaphore() {
         return semaphore;
+    }
+
+    public static void broadcastToAll(String message) {
+        for (ClientHandler client : clientesConectados.values()) {
+            client.enviarRespuesta(message);
+        }
+    }
+
+    public static void sendToUser(String username, String message) {
+        for (Map.Entry<String, String> entry : usuarios.entrySet()) {
+            if (entry.getValue().equals(username)) {
+                ClientHandler client = clientesConectados.get(entry.getKey());
+                if (client != null) {
+                    client.enviarRespuesta(message);
+                }
+            }
+        }
     }
 }

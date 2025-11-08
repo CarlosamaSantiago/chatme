@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat App</title>
+    <link rel="stylesheet" href="chat.css">
+</head>
+<body>
+    <div class="chat-container">
+        <div class="sidebar">
+            <div class="user-info">
+                <div class="avatar" id="userAvatar">
+                    U
+                </div>
+                <span class="username" id="usernameDisplay">Usuario</span>
+            </div>
+
+            <div class="create-group">
+                <input 
+                    id="newGroupName"
+                    placeholder="Nombre del grupo"
+                    class="group-input"
+                />
+                <button class="create-btn" onclick="createGroup()">Crear</button>
+            </div>
+
+            <div class="user-list">
+                <h3>Usuarios Conectados</h3>
+                <div id="usersList"></div>
+            </div>
+
+            <div class="group-list">
+                <h3>Grupos</h3>
+                <div id="groupsList"></div>
+            </div>
+        </div>
+
+        <div class="chat-window">
+            <div class="top-menu">
+                <div class="buttons">
+                    <div class="button close"></div>
+                    <div class="button minimize"></div>
+                    <div class="button maximize"></div>
+                </div>
+                <div class="title">
+                    Chat - <span id="chatTarget">Selecciona un chat</span>
+                    <span id="groupBadge" class="group-badge" style="display: none;">Grupo</span>
+                </div>
+            </div>
+
+            <div class="messages" id="messagesContainer">
+            </div>
+
+            <div class="bottom-wrapper" id="messageInputWrapper" style="display: none;">
+                <input
+                    id="messageInput"
+                    class="message-input"
+                    placeholder="Escribe un mensaje..."
+                />
+                <button class="send-button" onclick="sendMessage()">Enviar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="chat.js"></script>
+</body>
+</html>
