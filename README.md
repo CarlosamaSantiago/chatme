@@ -74,3 +74,104 @@ this.API_URL = 'http://(ip de la maquina donde ejecutará el server front estati
 
 De esta manera, podrá, desde otra maquina, acceder a la dirección que le indique la consola cuando realice el paso 3.
 
+
+### Cómo se conectan el frontend, el proxy y el backend:
+
+Nuestra aplicación está separada en **tres capas**:
+
+1. **Frontend (cliente-web)** – interfaz en el navegador
+2. **Proxy HTTP (proxy-http)** – traduce peticiones HTTP a TCP
+3. **Servidor Java (servidor-java)** – lógica del chat y manejo de conexiones
+
+#### 1. Frontend → Proxy HTTP
+
+* El frontend se sirve como archivos estáticos con:
+
+  ```bash
+  cd cliente-web
+  npx serve .
+  ```
+
+* El archivo `chat.js` configura la URL del API:
+
+  ```js
+  this.API_URL = 'http://localhost:3000';
+  ```
+
+* Cada acción del usuario se envía al **proxy HTTP** mediante `fetch`:
+
+  * `/register` para registrar un usuario
+  * `/getUsers` para listar usuarios
+  * `/getGroups` para listar grupos
+  * `/createGroup` para crear grupos
+  * `/sendMessage` para enviar mensajes
+  * `/getHistory` para obtener historial
+
+* Es decir, el navegador **solo habla HTTP** con el proxy en `http://localhost:3000`.
+  No se conecta directamente al servidor Java.
+
+#### 2. Proxy HTTP → Servidor Java
+
+* El proxy está implementado con **Node.js + Express** en `proxy-http/index.js` y escucha en el puerto **3000**:
+
+  ```bash
+  cd proxy-http
+  npm install
+  node index.js
+  ```
+
+* Cada endpoint del proxy toma la petición HTTP del frontend y la convierte en un mensaje JSON con un campo `action`, por ejemplo:
+
+  ```json
+  { "action": "REGISTER", "username": "Paula" }
+  { "action": "SEND_MESSAGE", "from": "A", "to": "B", "message": "Hola" }
+  ```
+
+* Ese JSON se envía al servidor Java usando **TCP** desde `chatDelegate.js`:
+
+  ```js
+  const SERVER_HOST = 'localhost';
+  const SERVER_PORT = 5000;
+  ```
+
+* El proxy actúa como “puente”:
+
+  `HTTP (frontend) → JSON → TCP (servidor Java) → JSON → HTTP (respuesta al frontend)`
+
+#### 3. Servidor Java
+
+* El servidor Java es el backend real del chat. Se ejecuta con:
+
+  ```bash
+  cd servidor-java
+  ./gradlew build
+  java -jar build/libs/servidor-java-1.0-SNAPSHOT.jar
+  ```
+
+* Escucha en el puerto **5000** (debe coincidir con `SERVER_PORT` en `chatDelegate.js`).
+
+* Recibe los JSON enviados por el proxy, interpreta el campo `action` y realiza:
+
+  * registro de usuarios,
+  * envío y distribución de mensajes,
+  * manejo de grupos,
+  * almacenamiento y consulta de historial.
+
+* Devuelve una respuesta JSON al proxy, que este reenvía al frontend.
+
+#### Esquema resumen
+
+```text
+Navegador (cliente-web)
+        │  HTTP (fetch a /register, /sendMessage, etc.)
+        ▼
+Proxy HTTP Node (puerto 3000)
+        │  TCP con mensajes JSON
+        ▼
+Servidor Java (puerto 5000)
+```
+
+---
+
+4. El frontend puede servir localmente (con `npx serve .`) o desde cualquier servidor web; mientras el navegador pueda alcanzar la URL del proxy (`API_URL`), la comunicación funciona.
+
