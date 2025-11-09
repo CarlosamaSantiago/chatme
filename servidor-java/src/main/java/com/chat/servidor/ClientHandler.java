@@ -69,16 +69,19 @@ public class ClientHandler implements Runnable {
     private void handleRegister(String message) {
         this.username = extractValue(message, "username");
 
-        ChatServer.getUsuarios().put(clientId, username);
-        ChatServer.getClientesConectados().put(clientId, this);
+        if (username != null && !username.trim().isEmpty()) {
 
-        ChatServer.getUsuariosConectados().put(username, this);
+            ChatServer.getUsuariosRegistrados().add(username);
+            ChatServer.getUsuarios().put(clientId, username);
+            ChatServer.getClientesConectados().put(clientId, this);
+            ChatServer.getUsuariosConectados().put(username, this);
 
-        System.out.println("Usuario registrado: " + username + " [" + clientId + "]");
+            System.out.println("Usuario registrado: " + username + " [" + clientId + "]");
 
-        enviarRespuesta("{\"action\":\"REGISTERED\",\"username\":\"" + username + "\"}");
+            enviarRespuesta("{\"action\":\"REGISTERED\",\"username\":\"" + username + "\"}");
 
-        broadcastUserList();
+            broadcastUserList();
+        }
     }
 
     private void handleCreateGroup(String message) {
@@ -89,8 +92,10 @@ public class ClientHandler implements Runnable {
                 ChatServer.getHistorial().put(groupName, new ArrayList<>());
                 System.out.println("Grupo creado: " + groupName);
 
+
+                HistoryManager.saveHistory(ChatServer.getHistorial(), ChatServer.getGrupos());
+
                 enviarRespuesta("{\"action\":\"GROUP_CREATED\",\"groupName\":\"" + groupName + "\"}");
-                broadcastGroupList();
             } else {
                 enviarRespuesta("{\"error\":\"El grupo ya existe\"}");
             }
@@ -112,12 +117,12 @@ public class ClientHandler implements Runnable {
                     escapeJson(to) + "\",\"message\":\"" + escapeJson(msg) +
                     "\",\"timestamp\":\"" + timestamp + "\",\"isGroup\":" + isGroup + "}";
 
-            // Guardar en historial
+
             String historyKey;
             if (isGroup) {
                 historyKey = to;
             } else {
-                // Clave simétrica: orden alfabético de los nombres
+
                 List<String> pair = Arrays.asList(from, to);
                 Collections.sort(pair);
                 historyKey = pair.get(0) + "_" + pair.get(1);
@@ -127,13 +132,11 @@ public class ClientHandler implements Runnable {
 
             System.out.println("Mensaje de " + from + " a " + to + ": " + msg);
 
-            // Enviar mensaje
-            if (isGroup) {
-                ChatServer.broadcastToAll("{\"action\":\"MESSAGE\",\"message\":" + messageJson + "}");
-            } else {
-                ChatServer.sendToUser(to, "{\"action\":\"MESSAGE\",\"message\":" + messageJson + "}");
-                enviarRespuesta("{\"action\":\"MESSAGE\",\"message\":" + messageJson + "}");
-            }
+
+            HistoryManager.saveHistory(ChatServer.getHistorial(), ChatServer.getGrupos());
+
+
+            enviarRespuesta("{\"action\":\"MESSAGE_SENT\",\"message\":" + messageJson + "}");
         } else {
             enviarRespuesta("{\"error\":\"Datos incompletos para enviar mensaje\"}");
         }
@@ -159,7 +162,7 @@ public class ClientHandler implements Runnable {
 
             System.out.println("Historial solicitado para: " + historyKey + " (" + history.size() + " mensajes)");
 
-            // Construir array JSON correctamente
+
             StringBuilder json = new StringBuilder("{\"action\":\"HISTORY\",\"messages\":[");
             for (int i = 0; i < history.size(); i++) {
                 json.append(history.get(i));
@@ -175,7 +178,9 @@ public class ClientHandler implements Runnable {
     }
 
     private void handleGetUsers() {
-        List<String> users = new ArrayList<>(ChatServer.getUsuarios().values());
+
+        List<String> users = new ArrayList<>(ChatServer.getUsuariosRegistrados());
+        Collections.sort(users);
         StringBuilder json = new StringBuilder("{\"users\":[");
         for (int i = 0; i < users.size(); i++) {
             json.append("\"").append(escapeJson(users.get(i))).append("\"");
@@ -202,29 +207,11 @@ public class ClientHandler implements Runnable {
     }
 
     private void broadcastUserList() {
-        List<String> users = new ArrayList<>(ChatServer.getUsuarios().values());
-        StringBuilder json = new StringBuilder("{\"action\":\"USER_LIST\",\"users\":[");
-        for (int i = 0; i < users.size(); i++) {
-            json.append("\"").append(escapeJson(users.get(i))).append("\"");
-            if (i < users.size() - 1)
-                json.append(",");
-        }
-        json.append("]}");
 
-        ChatServer.broadcastToAll(json.toString());
     }
 
     private void broadcastGroupList() {
-        List<String> groups = new ArrayList<>(ChatServer.getGrupos().keySet());
-        StringBuilder json = new StringBuilder("{\"action\":\"GROUP_LIST\",\"groups\":[");
-        for (int i = 0; i < groups.size(); i++) {
-            json.append("\"").append(escapeJson(groups.get(i))).append("\"");
-            if (i < groups.size() - 1)
-                json.append(",");
-        }
-        json.append("]}");
 
-        ChatServer.broadcastToAll(json.toString());
     }
 
     public void enviarRespuesta(String respuesta) {
@@ -279,15 +266,24 @@ public class ClientHandler implements Runnable {
         try {
             ChatServer.getSemaphore().release();
 
+
+            ChatServer.getClientesConectados().remove(clientId);
+            
+
+            if (username != null) {
+
+                ClientHandler currentHandler = ChatServer.getUsuariosConectados().get(username);
+                if (currentHandler == this) {
+                    ChatServer.getUsuariosConectados().remove(username);
+                }
+            }
+
             if (in != null)
                 in.close();
             if (out != null)
                 out.close();
             if (socket != null && !socket.isClosed())
                 socket.close();
-
-            System.out.println("Cliente desconectado: " + clientId + " (" + username + ")");
-            broadcastUserList();
 
         } catch (IOException e) {
             System.err.println("Error al cerrar conexión: " + e.getMessage());

@@ -15,6 +15,8 @@ public class ChatServer {
     private ExecutorService pool;
     private static Semaphore semaphore;
     private static Map<String, ClientHandler> usuariosConectados = new ConcurrentHashMap<>();
+    // Usuarios registrados (independiente de sockets activos)
+    private static Set<String> usuariosRegistrados = ConcurrentHashMap.newKeySet();
 
     public static Map<String, ClientHandler> getUsuariosConectados() {
         return usuariosConectados;
@@ -35,6 +37,9 @@ public class ChatServer {
         System.out.println("Servidor de Chat iniciado en puerto " + PORT);
         System.out.println("===========================================");
 
+        // Cargar historial y grupos guardados
+        HistoryManager.loadHistory(historial, grupos);
+
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
             while (true) {
                 Socket clientSocket = serverSocket.accept();
@@ -52,6 +57,8 @@ public class ChatServer {
             System.err.println("Error en el servidor: " + e.getMessage());
             e.printStackTrace();
         } finally {
+            // Guardar historial antes de cerrar el servidor
+            HistoryManager.saveHistory(historial, grupos);
             pool.shutdown();
         }
     }
@@ -72,21 +79,22 @@ public class ChatServer {
         return usuarios;
     }
 
+    public static Set<String> getUsuariosRegistrados() {
+        return usuariosRegistrados;
+    }
+
     public static Semaphore getSemaphore() {
         return semaphore;
     }
 
     public static void broadcastToAll(String message) {
-        for (ClientHandler client : clientesConectados.values()) {
-            client.enviarRespuesta(message);
-        }
+        // No hacer broadcast porque no hay conexiones persistentes
+        // Los mensajes se recuperan mediante polling del historial
     }
 
     public static void sendToUser(String username, String message) {
-        ClientHandler client = usuariosConectados.get(username);
-        if (client != null) {
-            client.enviarRespuesta(message);
-        }
+        // No enviar directamente porque no hay conexiones persistentes
+        // Los mensajes se recuperan mediante polling del historial
     }
 
 }
