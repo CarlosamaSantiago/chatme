@@ -37,7 +37,7 @@ npx serve .
 ```
 
 ### 4 Abrir un navegador 
-Al ejeutar el paso 3, la consola nos indicará en qué dirección esta corriendo el servidor web estático.
+Al ejecutar el paso 3, la consola nos indicará en qué dirección esta corriendo el servidor web estático.
 
 ### 5 Usar Chatme
 Al ingresar verá los usuarios disponibles y los grupos que estén creados.
@@ -74,104 +74,95 @@ this.API_URL = 'http://(ip de la maquina donde ejecutará el server front estati
 
 De esta manera, podrá, desde otra maquina, acceder a la dirección que le indique la consola cuando realice el paso 3.
 
+**Flujo de Comunicación entre Cliente, Proxy y Backend**
 
-### Cómo se conectan el frontend, el proxy y el backend:
+El sistema de chat sigue una arquitectura de tres capas donde cada componente tiene responsabilidades específicas que se integran para proporcionar una experiencia de chat en tiempo real.
 
-Nuestra aplicación está separada en **tres capas**:
+**Flujo Principal de Comunicación**
 
-1. **Frontend (cliente-web)** – interfaz en el navegador
-2. **Proxy HTTP (proxy-http)** – traduce peticiones HTTP a TCP
-3. **Servidor Java (servidor-java)** – lógica del chat y manejo de conexiones
+**Cliente Web (Frontend) ↔ Proxy HTTP (Middleware) ↔ Backend Java (Servidor Socket)**
 
-#### 1. Frontend → Proxy HTTP
+El Cliente Web (interfaz de usuario en navegador) se comunica exclusivamente mediante peticiones HTTP REST con el Proxy HTTP (Node.js/Express), que actúa como intermediario convirtiendo estas peticiones en conexiones de socket TCP con el Backend Java, donde reside toda la lógica del negocio y gestión de estado.
 
-* El frontend se sirve como archivos estáticos con:
+**Secuencia Operativa Integrada**
 
-  ```bash
-  cd cliente-web
-  npx serve .
-  ```
+**1. Ciclo de Registro y Conexión**
 
-* El archivo `chat.js` configura la URL del API:
+- El usuario ingresa su nombre en el cliente web
+- El frontend envía POST /register al proxy con el username
+- El proxy establece conexión socket con el backend Java enviando {"action":"REGISTER","username":"X"}
+- El backend registra al usuario en sus mapas internos y responde confirmación
+- Simultáneamente, el backend notifica a todos los clientes conectados para actualizar las listas de usuarios
 
-  ```js
-  this.API_URL = 'http://localhost:3000';
-  ```
+**2. Gestión de Conversaciones**
 
-* Cada acción del usuario se envía al **proxy HTTP** mediante `fetch`:
+- **Para chats privados**: Cuando un usuario selecciona otro usuario, el frontend inicia polling cada 2 segundos a /getHistory
+- **Para grupos**: Similar proceso pero marcando isGroup:true
+- El backend calcula la clave de historial (combinación ordenada de usuarios para privados, nombre del grupo para grupales)
+- Los mensajes se almacenan en memoria y se recuperan bajo demanda
 
-  * `/register` para registrar un usuario
-  * `/getUsers` para listar usuarios
-  * `/getGroups` para listar grupos
-  * `/createGroup` para crear grupos
-  * `/sendMessage` para enviar mensajes
-  * `/getHistory` para obtener historial
+**3. Envío de Mensajes en Tiempo Real**
 
-* Es decir, el navegador **solo habla HTTP** con el proxy en `http://localhost:3000`.
-  No se conecta directamente al servidor Java.
+- **Mensajes privados**:
+  - Cliente A → Proxy → Backend → Cliente B (destinatario) + Cliente A (confirmación)
+- **Mensajes grupales**:
+  - Cliente → Proxy → Backend → Todos los clientes conectados
+- El backend mantiene historial simétrico para conversaciones privadas y broadcast para grupales
 
-#### 2. Proxy HTTP → Servidor Java
+**4. Sincronización de Estado**
 
-* El proxy está implementado con **Node.js + Express** en `proxy-http/index.js` y escucha en el puerto **3000**:
+- Polling automático cada 5 segundos para actualizar listas de usuarios y grupos
+- Notificaciones push cuando ocurren eventos (nuevos grupos, usuarios que se conectan/desconectan)
+- El backend ejecuta broadcasts automáticos ante cambios de estado
 
-  ```bash
-  cd proxy-http
-  npm install
-  node index.js
-  ```
+**Protocolos y Adaptación**
 
-* Cada endpoint del proxy toma la petición HTTP del frontend y la convierte en un mensaje JSON con un campo `action`, por ejemplo:
+**Del Frontend al Proxy**: Comunicación HTTP REST estándar
 
-  ```json
-  { "action": "REGISTER", "username": "Paula" }
-  { "action": "SEND_MESSAGE", "from": "A", "to": "B", "message": "Hola" }
-  ```
+javascript
 
-* Ese JSON se envía al servidor Java usando **TCP** desde `chatDelegate.js`:
+*// Ejemplo: Frontend → Proxy*
 
-  ```js
-  const SERVER_HOST = 'localhost';
-  const SERVER_PORT = 5000;
-  ```
+POST /sendMessage
 
-* El proxy actúa como “puente”:
+{
 
-  `HTTP (frontend) → JSON → TCP (servidor Java) → JSON → HTTP (respuesta al frontend)`
+`  `"from": "usuarioA",
 
-#### 3. Servidor Java
+`  `"to": "usuarioB", 
 
-* El servidor Java es el backend real del chat. Se ejecuta con:
+`  `"message": "Hola",
 
-  ```bash
-  cd servidor-java
-  ./gradlew build
-  java -jar build/libs/servidor-java-1.0-SNAPSHOT.jar
-  ```
+`  `"isGroup": false
 
-* Escucha en el puerto **5000** (debe coincidir con `SERVER_PORT` en `chatDelegate.js`).
+}
 
-* Recibe los JSON enviados por el proxy, interpreta el campo `action` y realiza:
+**Del Proxy al Backend**: Mensajes JSON sobre sockets TCP
 
-  * registro de usuarios,
-  * envío y distribución de mensajes,
-  * manejo de grupos,
-  * almacenamiento y consulta de historial.
+json
 
-* Devuelve una respuesta JSON al proxy, que este reenvía al frontend.
+*// Ejemplo: Proxy → Backend*
 
-#### Esquema resumen
+{"action":"SEND\_MESSAGE","from":"usuarioA","to":"usuarioB","message":"Hola","isGroup":false}
 
-```text
-Navegador (cliente-web)
-        │  HTTP (fetch a /register, /sendMessage, etc.)
-        ▼
-Proxy HTTP Node (puerto 3000)
-        │  TCP con mensajes JSON
-        ▼
-Servidor Java (puerto 5000)
-```
+**Respuestas del Backend**: JSON con estructura consistente
 
----
+json
 
-4. El frontend puede servir localmente (con `npx serve .`) o desde cualquier servidor web; mientras el navegador pueda alcanzar la URL del proxy (`API_URL`), la comunicación funciona.
+*// Éxito*
 
+{"action":"MESSAGE\_SENT","timestamp":"..."}
+
+*// Error*  
+
+{"error":"Descripción del error"}
+
+**Características Clave del Flujo**
+
+- **Separación de responsabilidades**: Cada capa tiene una función específica
+- **Adaptación de protocolos**: El proxy convierte HTTP a sockets TCP
+- **Estado en memoria**: El backend Java mantiene todo el estado de la aplicación
+- **Comunicación bidireccional**: Aunque el frontend usa HTTP, simula tiempo real mediante polling
+- **Gestión de concurrencia**: Backend Java usa ExecutorService y Semaphore para manejar múltiples clientes
+
+Este diseño permite que el frontend web se comunique eficientemente con un backend de sockets a través de un proxy que realiza la necesaria traducción de protocolos, manteniendo la escalabilidad y responsividad del sistema de chat.
