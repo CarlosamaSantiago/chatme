@@ -1,4 +1,4 @@
-# Chat Parte 2 - Cliente HTTP y comunicación mediante Prox
+# Chat Parte 2 - Cliente HTTP y comunicación mediante Proxy 
 ## Integrantes
 - Santiago Carlosama
 - Joshua Sayur
