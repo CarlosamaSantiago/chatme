@@ -11,9 +11,18 @@ function sendToChatServer(json) {
       client.write(json + '\n');
     });
 
-    client.on('data', chunk => data += chunk.toString());
-    client.on('end', () => resolve(data));
-    client.on('error', reject);
+    client.on('data', chunk => {
+      data += chunk.toString();
+
+      if (data.includes('\n')) {
+        resolve(data.trim());
+        client.end();
+      }
+    });
+
+    client.on('error', err => {
+      reject(err);
+    });
   });
 }
 

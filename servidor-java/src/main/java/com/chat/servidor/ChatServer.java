@@ -14,6 +14,11 @@ public class ChatServer {
     private static Map<String, String> usuarios = new ConcurrentHashMap<>();
     private ExecutorService pool;
     private static Semaphore semaphore;
+    private static Map<String, ClientHandler> usuariosConectados = new ConcurrentHashMap<>();
+
+    public static Map<String, ClientHandler> getUsuariosConectados() {
+        return usuariosConectados;
+    }
 
     public static void main(String[] args) {
         ChatServer servidor = new ChatServer(PORT);
@@ -21,7 +26,7 @@ public class ChatServer {
     }
 
     public ChatServer(int puerto) {
-        this.semaphore = new Semaphore(5); 
+        this.semaphore = new Semaphore(5);
         this.pool = Executors.newCachedThreadPool();
     }
 
@@ -29,12 +34,12 @@ public class ChatServer {
         System.out.println("===========================================");
         System.out.println("Servidor de Chat iniciado en puerto " + PORT);
         System.out.println("===========================================");
-        
+
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
             while (true) {
                 Socket clientSocket = serverSocket.accept();
                 System.out.println("Cliente conectado: " + clientSocket.getInetAddress());
-                
+
                 ClientHandler handler = new ClientHandler(clientSocket, this);
                 try {
                     semaphore.acquire();
@@ -78,13 +83,10 @@ public class ChatServer {
     }
 
     public static void sendToUser(String username, String message) {
-        for (Map.Entry<String, String> entry : usuarios.entrySet()) {
-            if (entry.getValue().equals(username)) {
-                ClientHandler client = clientesConectados.get(entry.getKey());
-                if (client != null) {
-                    client.enviarRespuesta(message);
-                }
-            }
+        ClientHandler client = usuariosConectados.get(username);
+        if (client != null) {
+            client.enviarRespuesta(message);
         }
     }
+
 }

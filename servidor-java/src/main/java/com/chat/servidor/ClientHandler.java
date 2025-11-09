@@ -54,8 +54,11 @@ public class ClientHandler implements Runnable {
                 handleRegister(message);
             } else if (message.contains("\"action\":\"GET_USERS\"")) {
                 handleGetUsers();
-            } else if (message.contains("\"action\":\"GET_GROUPS\"")) {
+            } else if (message.contains("\"action\":\"GET_GROUPS\"")
+                    || message.contains("\"action\":\"LIST_GROUPS\"")) {
                 handleGetGroups();
+            } else {
+                enviarRespuesta("{\"error\":\"Acción no reconocida\"}");
             }
 
         } catch (Exception e) {
@@ -65,9 +68,16 @@ public class ClientHandler implements Runnable {
 
     private void handleRegister(String message) {
         this.username = extractValue(message, "username");
+
         ChatServer.getUsuarios().put(clientId, username);
+        ChatServer.getClientesConectados().put(clientId, this);
+
+        ChatServer.getUsuariosConectados().put(username, this);
+
+        System.out.println("Usuario registrado: " + username + " [" + clientId + "]");
+
         enviarRespuesta("{\"action\":\"REGISTERED\",\"username\":\"" + username + "\"}");
-        
+
         broadcastUserList();
     }
 
@@ -77,11 +87,15 @@ public class ClientHandler implements Runnable {
             if (!ChatServer.getGrupos().containsKey(groupName)) {
                 ChatServer.getGrupos().put(groupName, new ArrayList<>());
                 ChatServer.getHistorial().put(groupName, new ArrayList<>());
+                System.out.println("Grupo creado: " + groupName);
+
                 enviarRespuesta("{\"action\":\"GROUP_CREATED\",\"groupName\":\"" + groupName + "\"}");
                 broadcastGroupList();
             } else {
                 enviarRespuesta("{\"error\":\"El grupo ya existe\"}");
             }
+        } else {
+            enviarRespuesta("{\"error\":\"Nombre de grupo inválido\"}");
         }
     }
 
@@ -90,57 +104,127 @@ public class ClientHandler implements Runnable {
         String to = extractValue(message, "to");
         String msg = extractValue(message, "message");
         String isGroupStr = extractValue(message, "isGroup");
-        boolean isGroup = Boolean.parseBoolean(isGroupStr);
+        boolean isGroup = "true".equals(isGroupStr);
 
         if (from != null && to != null && msg != null) {
             String timestamp = new Date().toString();
-            String messageJson = "{\"from\":\"" + from + "\",\"to\":\"" + to + "\",\"message\":\"" + 
-                                msg + "\",\"timestamp\":\"" + timestamp + "\",\"isGroup\":" + isGroup + "}";
-            
-            String historyKey = isGroup ? to : from + "_" + to;
+            String messageJson = "{\"from\":\"" + escapeJson(from) + "\",\"to\":\"" +
+                    escapeJson(to) + "\",\"message\":\"" + escapeJson(msg) +
+                    "\",\"timestamp\":\"" + timestamp + "\",\"isGroup\":" + isGroup + "}";
+
+            // Guardar en historial
+            String historyKey;
+            if (isGroup) {
+                historyKey = to;
+            } else {
+                // Clave simétrica: orden alfabético de los nombres
+                List<String> pair = Arrays.asList(from, to);
+                Collections.sort(pair);
+                historyKey = pair.get(0) + "_" + pair.get(1);
+            }
+
             ChatServer.getHistorial().computeIfAbsent(historyKey, k -> new ArrayList<>()).add(messageJson);
 
+            System.out.println("Mensaje de " + from + " a " + to + ": " + msg);
+
+            // Enviar mensaje
             if (isGroup) {
                 ChatServer.broadcastToAll("{\"action\":\"MESSAGE\",\"message\":" + messageJson + "}");
             } else {
                 ChatServer.sendToUser(to, "{\"action\":\"MESSAGE\",\"message\":" + messageJson + "}");
                 enviarRespuesta("{\"action\":\"MESSAGE\",\"message\":" + messageJson + "}");
             }
+        } else {
+            enviarRespuesta("{\"error\":\"Datos incompletos para enviar mensaje\"}");
         }
     }
 
     private void handleGetHistory(String message) {
         String target = extractValue(message, "target");
         String fromUser = extractValue(message, "from");
-        boolean isGroup = Boolean.parseBoolean(extractValue(message, "isGroup"));
-        
-        if (target != null && fromUser != null) {
-            String historyKey = isGroup ? target : fromUser + "_" + target;
+        String isGroupStr = extractValue(message, "isGroup");
+        boolean isGroup = "true".equals(isGroupStr);
+
+        if (target != null) {
+            String historyKey;
+            if (isGroup) {
+                historyKey = target;
+            } else {
+                List<String> pair = Arrays.asList(fromUser, target);
+                Collections.sort(pair);
+                historyKey = pair.get(0) + "_" + pair.get(1);
+            }
+
             List<String> history = ChatServer.getHistorial().getOrDefault(historyKey, new ArrayList<>());
-            enviarRespuesta("{\"action\":\"HISTORY\",\"messages\":" + history + "}");
+
+            System.out.println("Historial solicitado para: " + historyKey + " (" + history.size() + " mensajes)");
+
+            // Construir array JSON correctamente
+            StringBuilder json = new StringBuilder("{\"action\":\"HISTORY\",\"messages\":[");
+            for (int i = 0; i < history.size(); i++) {
+                json.append(history.get(i));
+                if (i < history.size() - 1)
+                    json.append(",");
+            }
+            json.append("]}");
+
+            enviarRespuesta(json.toString());
+        } else {
+            enviarRespuesta("{\"action\":\"HISTORY\",\"messages\":[]}");
         }
     }
 
     private void handleGetUsers() {
         List<String> users = new ArrayList<>(ChatServer.getUsuarios().values());
-        enviarRespuesta("{\"action\":\"USER_LIST\",\"users\":" + users + "}");
+        StringBuilder json = new StringBuilder("{\"users\":[");
+        for (int i = 0; i < users.size(); i++) {
+            json.append("\"").append(escapeJson(users.get(i))).append("\"");
+            if (i < users.size() - 1)
+                json.append(",");
+        }
+        json.append("]}");
+
+        enviarRespuesta(json.toString());
     }
 
     private void handleGetGroups() {
         List<String> groups = new ArrayList<>(ChatServer.getGrupos().keySet());
-        enviarRespuesta("{\"action\":\"GROUP_LIST\",\"groups\":" + groups + "}");
+        StringBuilder json = new StringBuilder("{\"action\":\"GROUP_LIST\",\"groups\":[");
+        for (int i = 0; i < groups.size(); i++) {
+            json.append("\"").append(escapeJson(groups.get(i))).append("\"");
+            if (i < groups.size() - 1)
+                json.append(",");
+        }
+        json.append("]}");
+
+        System.out.println("Enviando lista de grupos: " + groups);
+        enviarRespuesta(json.toString());
     }
 
     private void broadcastUserList() {
         List<String> users = new ArrayList<>(ChatServer.getUsuarios().values());
-        String userListJson = "{\"action\":\"USER_LIST\",\"users\":" + users + "}";
-        ChatServer.broadcastToAll(userListJson);
+        StringBuilder json = new StringBuilder("{\"action\":\"USER_LIST\",\"users\":[");
+        for (int i = 0; i < users.size(); i++) {
+            json.append("\"").append(escapeJson(users.get(i))).append("\"");
+            if (i < users.size() - 1)
+                json.append(",");
+        }
+        json.append("]}");
+
+        ChatServer.broadcastToAll(json.toString());
     }
 
     private void broadcastGroupList() {
         List<String> groups = new ArrayList<>(ChatServer.getGrupos().keySet());
-        String groupListJson = "{\"action\":\"GROUP_LIST\",\"groups\":" + groups + "}";
-        ChatServer.broadcastToAll(groupListJson);
+        StringBuilder json = new StringBuilder("{\"action\":\"GROUP_LIST\",\"groups\":[");
+        for (int i = 0; i < groups.size(); i++) {
+            json.append("\"").append(escapeJson(groups.get(i))).append("\"");
+            if (i < groups.size() - 1)
+                json.append(",");
+        }
+        json.append("]}");
+
+        ChatServer.broadcastToAll(json.toString());
     }
 
     public void enviarRespuesta(String respuesta) {
@@ -157,40 +241,57 @@ public class ClientHandler implements Runnable {
             if (start == -1) {
                 searchKey = "\"" + key + "\":";
                 start = json.indexOf(searchKey);
-                if (start == -1) return null;
-                
+                if (start == -1)
+                    return null;
+
                 start += searchKey.length();
                 int end = json.indexOf(",", start);
-                if (end == -1) end = json.indexOf("}", start);
-                if (end == -1) return null;
-                
-                return json.substring(start, end).trim();
+                if (end == -1)
+                    end = json.indexOf("}", start);
+                if (end == -1)
+                    return null;
+
+                return json.substring(start, end).trim().replace("\"", "");
             }
-            
+
             start += searchKey.length();
             int end = json.indexOf("\"", start);
-            if (end == -1) return null;
-            
+            if (end == -1)
+                return null;
+
             return json.substring(start, end);
         } catch (Exception e) {
             return null;
         }
     }
 
+    private String escapeJson(String str) {
+        if (str == null)
+            return "";
+        return str.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
+    }
+
     private void cleanup() {
         try {
-            ChatServer.getClientesConectados().remove(clientId);
-            ChatServer.getUsuarios().remove(clientId);
             ChatServer.getSemaphore().release();
-            
-            if (in != null) in.close();
-            if (out != null) out.close();
-            if (socket != null && !socket.isClosed()) socket.close();
-            
-            System.out.println("Cliente desconectado: " + clientId);
+
+            if (in != null)
+                in.close();
+            if (out != null)
+                out.close();
+            if (socket != null && !socket.isClosed())
+                socket.close();
+
+            System.out.println("Cliente desconectado: " + clientId + " (" + username + ")");
             broadcastUserList();
+
         } catch (IOException e) {
             System.err.println("Error al cerrar conexión: " + e.getMessage());
         }
     }
+
 }
