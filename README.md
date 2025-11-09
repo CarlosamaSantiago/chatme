@@ -173,5 +173,5 @@ Servidor Java (puerto 5000)
 
 ---
 
-4. El frontend se puede servir localmente (con `npx serve .`) o desde cualquier servidor web; mientras el navegador pueda alcanzar la URL del proxy (`API_URL`), la comunicación funciona.
+4. El frontend puede servir localmente (con `npx serve .`) o desde cualquier servidor web; mientras el navegador pueda alcanzar la URL del proxy (`API_URL`), la comunicación funciona.
 
