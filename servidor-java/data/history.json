@@ -1,0 +1,26 @@
+{
+  "historial": {
+    "HooneyLovers": [
+      {"from":"Pauli","to":"HooneyLovers","message":"Holi","timestamp":"Mon Nov 24 21:11:15 COT 2025","isGroup":true},
+      {"from":"Pauli","to":"HooneyLovers","message":"__VOICE__:/audios/1764036973946_0ranpcuig8ag.webm","timestamp":"Mon Nov 24 21:16:13 COT 2025","isGroup":true},
+      {"from":"Pauli","to":"HooneyLovers","message":"__VOICE__:/audios/1764036990825_fk5su5oye8.webm","timestamp":"Mon Nov 24 21:16:30 COT 2025","isGroup":true},
+      {"from":"Pauli","to":"HooneyLovers","message":"__VOICE__:/audios/1764037038220_7dtf86cuk8x.webm","timestamp":"Mon Nov 24 21:17:18 COT 2025","isGroup":true},
+      {"from":"Seb","to":"HooneyLovers","message":"__VOICE__:/audios/1764037890161_uc10juxgj5n.webm","timestamp":"Mon Nov 24 21:31:30 COT 2025","isGroup":true},
+      {"from":"Seb","to":"HooneyLovers","message":"__VOICE__:/audios/1764037915643_ird08famc2e.webm","timestamp":"Mon Nov 24 21:31:55 COT 2025","isGroup":true},
+      {"from":"Pauli","to":"HooneyLovers","message":"__VOICE__:/audios/1764040656226_5jysdzeg97d.webm","timestamp":"Mon Nov 24 22:17:36 COT 2025","isGroup":true},
+      {"from":"Seb","to":"HooneyLovers","message":"__VOICE__:/audios/1764042387570_coouip75bzv.webm","timestamp":"Mon Nov 24 22:46:27 COT 2025","isGroup":true},
+      {"from":"Seb","to":"HooneyLovers","message":"__VOICE__:/audios/1764043252913_y58j84neojc.webm","timestamp":"Mon Nov 24 23:00:52 COT 2025","isGroup":true}
+    ],
+    "Pauli_Seb": [
+      {"from":"Pauli","to":"Seb","message":"__VOICE__:/audios/1764037068047_dmpj4nuagf.webm","timestamp":"Mon Nov 24 21:17:48 COT 2025","isGroup":false},
+      {"from":"Pauli","to":"Seb","message":"__VOICE__:/audios/1764041645003_2ry7fsp6zgl.webm","timestamp":"Mon Nov 24 22:34:05 COT 2025","isGroup":false},
+      {"from":"Seb","to":"Pauli","message":"__VOICE__:/audios/1764042341689_rp05ti1wmf.webm","timestamp":"Mon Nov 24 22:45:41 COT 2025","isGroup":false},
+      {"from":"Seb","to":"Pauli","message":"__VOICE__:/audios/1764043075558_qe1jqfcx7rk.webm","timestamp":"Mon Nov 24 22:57:55 COT 2025","isGroup":false}
+    ]
+  },
+  "grupos": {
+    "HooneyLovers": [
+
+    ]
+  }
+}

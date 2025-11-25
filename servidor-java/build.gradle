@@ -19,6 +19,7 @@ repositories {
 dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.1'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.1'
+    implementation 'com.zeroc:ice:3.7.6'
 }
 
 test {
@@ -38,3 +39,15 @@ jar {
     }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
+
+// Tarea para compilar el slice
+task compileSlice {
+    doLast {
+        println "Compilando archivo Slice..."
+        exec {
+            commandLine 'slice2java', '--output-dir', 'src/main/java', 'src/main/slice/Chat.ice'
+        }
+    }
+}
+
+compileJava.dependsOn compileSlice
