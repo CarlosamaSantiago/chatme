@@ -35,9 +35,8 @@ services:
     plan: free
 
   # Cliente Web (Frontend estático)
-  - type: web
+  - type: static
     name: chatme-frontend
-    env: static
     rootDir: cliente-web
     buildCommand: npm install && npm run build
     staticPublishPath: dist
@@ -51,5 +50,4 @@ services:
       - type: rewrite
         source: /*
         destination: /index.html
-    plan: free
 
