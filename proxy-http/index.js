@@ -2,10 +2,11 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const { sendToChatServer } = require('./services/chatDelegate');
+const iceBridge = require('./services/iceBridge');
 
 const app = express();
 app.use(cors());
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: '50mb' })); // Aumentar límite para notas de voz
 
 app.post('/register', async (req, res) => {
     const { username } = req.body;
@@ -69,4 +70,87 @@ app.post('/getHistory', async (req, res) => {
     }
 });
 
-app.listen(3000, () => console.log('Proxy HTTP en puerto 3000'));
+// Endpoints Ice RPC
+app.post('/ice/registerUser', async (req, res) => {
+    try {
+        const result = await iceBridge.callIceMethod('registerUser', req.body);
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/ice/createGroup', async (req, res) => {
+    try {
+        const result = await iceBridge.callIceMethod('createGroup', req.body);
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/ice/sendMessage', async (req, res) => {
+    try {
+        const result = await iceBridge.callIceMethod('sendMessage', req.body);
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/ice/sendAudio', async (req, res) => {
+    try {
+        const result = await iceBridge.callIceMethod('sendAudio', req.body);
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/ice/sendVoiceNote', async (req, res) => {
+    // Alias para compatibilidad
+    try {
+        const result = await iceBridge.callIceMethod('sendVoiceNote', req.body);
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/ice/startCall', async (req, res) => {
+    try {
+        const result = await iceBridge.callIceMethod('startCall', req.body);
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/ice/getHistory', async (req, res) => {
+    try {
+        const result = await iceBridge.callIceMethod('getHistory', req.body);
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/ice/getUsers', async (req, res) => {
+    try {
+        const result = await iceBridge.callIceMethod('getUsers', req.body);
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/ice/getGroups', async (req, res) => {
+    try {
+        const result = await iceBridge.callIceMethod('getGroups', req.body);
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.listen(3000, () => console.log('Proxy HTTP en puerto 3000 (con soporte Ice RPC)'));

@@ -48,6 +48,10 @@ public class ClientHandler implements Runnable {
                 handleCreateGroup(message);
             } else if (message.contains("\"action\":\"SEND_MESSAGE\"")) {
                 handleSendMessage(message);
+            } else if (message.contains("\"action\":\"SEND_VOICE_NOTE\"")) {
+                handleSendVoiceNote(message);
+            } else if (message.contains("\"action\":\"START_CALL\"")) {
+                handleStartCall(message);
             } else if (message.contains("\"action\":\"GET_HISTORY\"")) {
                 handleGetHistory(message);
             } else if (message.contains("\"action\":\"REGISTER\"")) {
@@ -204,6 +208,58 @@ public class ClientHandler implements Runnable {
 
         System.out.println("Enviando lista de grupos: " + groups);
         enviarRespuesta(json.toString());
+    }
+
+    private void handleSendVoiceNote(String message) {
+        String from = extractValue(message, "from");
+        String to = extractValue(message, "to");
+        String isGroupStr = extractValue(message, "isGroup");
+        boolean isGroup = "true".equals(isGroupStr);
+        String audioDataStr = extractValue(message, "audioData");
+
+        if (from != null && to != null && audioDataStr != null) {
+            String timestamp = new Date().toString();
+            String messageJson = "{\"from\":\"" + escapeJson(from) + "\",\"to\":\"" +
+                    escapeJson(to) + "\",\"message\":\"[Nota de voz]\",\"timestamp\":\"" + 
+                    timestamp + "\",\"isGroup\":" + isGroup + ",\"type\":\"audio\",\"audioData\":\"" +
+                    escapeJson(audioDataStr) + "\"}";
+
+            String historyKey;
+            if (isGroup) {
+                historyKey = to;
+            } else {
+                List<String> pair = Arrays.asList(from, to);
+                Collections.sort(pair);
+                historyKey = pair.get(0) + "_" + pair.get(1);
+            }
+
+            ChatServer.getHistorial().computeIfAbsent(historyKey, k -> new ArrayList<>()).add(messageJson);
+            HistoryManager.saveHistory(ChatServer.getHistorial(), ChatServer.getGrupos());
+
+            System.out.println("Nota de voz de " + from + " a " + to);
+            enviarRespuesta("{\"action\":\"VOICE_NOTE_SENT\",\"message\":" + messageJson + "}");
+        } else {
+            enviarRespuesta("{\"error\":\"Datos incompletos para enviar nota de voz\"}");
+        }
+    }
+
+    private void handleStartCall(String message) {
+        String from = extractValue(message, "from");
+        String to = extractValue(message, "to");
+        String isGroupStr = extractValue(message, "isGroup");
+        boolean isGroup = "true".equals(isGroupStr);
+
+        if (from != null && to != null) {
+            String timestamp = new Date().toString();
+            String messageJson = "{\"from\":\"" + escapeJson(from) + "\",\"to\":\"" +
+                    escapeJson(to) + "\",\"message\":\"[Llamada iniciada]\",\"timestamp\":\"" + 
+                    timestamp + "\",\"isGroup\":" + isGroup + ",\"type\":\"call\"}";
+
+            System.out.println("Llamada iniciada de " + from + " a " + to);
+            enviarRespuesta("{\"action\":\"CALL_STARTED\",\"message\":" + messageJson + "}");
+        } else {
+            enviarRespuesta("{\"error\":\"Datos incompletos para iniciar llamada\"}");
+        }
     }
 
     private void broadcastUserList() {
