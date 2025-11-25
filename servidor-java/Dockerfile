@@ -3,13 +3,9 @@ FROM gradle:7.6-jdk17 AS build
 
 WORKDIR /app
 
-# Copiar archivos de configuración y wrapper de Gradle
+# Copiar archivos de configuración
 COPY build.gradle settings.gradle gradle.properties ./
 COPY gradle ./gradle
-COPY gradlew gradlew.bat ./
-
-# Hacer gradlew ejecutable
-RUN chmod +x ./gradlew
 
 # Copiar código fuente
 COPY src ./src
@@ -21,8 +17,8 @@ RUN apt-get update && apt-get install -y \
     zeroc-ice-all-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Compilar el proyecto
-RUN ./gradlew build --no-daemon
+# Compilar el proyecto usando gradle directamente (la imagen ya tiene Gradle instalado)
+RUN gradle build --no-daemon
 
 # Imagen de runtime
 FROM eclipse-temurin:17-jre-jammy
