@@ -5,8 +5,6 @@ services:
     env: docker
     rootDir: servidor-java
     envVars:
-      - key: PORT
-        value: 10000
       - key: ICE_HOST
         value: 0.0.0.0
     healthCheckPath: /
@@ -26,10 +24,7 @@ services:
           type: web
           property: host
       - key: ICE_SERVER_PORT
-        fromService:
-          name: chatme-java-server
-          type: web
-          property: port
+        value: 10001
     healthCheckPath: /
     plan: free
 
