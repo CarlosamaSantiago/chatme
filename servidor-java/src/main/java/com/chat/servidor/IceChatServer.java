@@ -38,18 +38,33 @@ public class IceChatServer {
             
             // Puerto asignado por Render
             String portStr = System.getenv("PORT");
-            int port = 10000; // Puerto por defecto
+            System.out.println("🔧 Variable PORT de Render: " + (portStr != null ? portStr : "NO DEFINIDA"));
+            
+            int httpPort = 10000; // Puerto por defecto
             if (portStr != null && !portStr.isEmpty()) {
                 try {
-                    port = Integer.parseInt(portStr);
+                    httpPort = Integer.parseInt(portStr);
+                    System.out.println("✅ Puerto HTTP configurado: " + httpPort);
                 } catch (NumberFormatException e) {
-                    System.err.println("⚠️  PORT inválido, usando puerto por defecto 10000");
+                    System.err.println("⚠️  PORT inválido: " + portStr + ", usando puerto por defecto 10000");
                 }
+            } else {
+                System.out.println("⚠️  PORT no definido, usando puerto por defecto 10000");
             }
             
-            // Crear adaptador de objetos Ice con endpoint WebSocket en el puerto de Render
-            // Ice WebSocket puede manejar conexiones HTTP también para health checks
-            String endpoint = "ws -h " + iceHost + " -p " + port;
+            // Puerto para Ice WebSocket - usar puerto diferente para evitar conflictos
+            int icePort = httpPort + 1;
+            System.out.println("🔧 Puerto Ice WebSocket: " + icePort);
+            
+            // Iniciar servidor HTTP PRIMERO para que Render lo detecte inmediatamente
+            System.out.println("🚀 Iniciando servidor HTTP en puerto " + httpPort + " para Render...");
+            startHttpServer(httpPort);
+            
+            // Esperar un momento para que el servidor HTTP se inicie
+            Thread.sleep(1000);
+            
+            // Crear adaptador de objetos Ice con endpoint WebSocket
+            String endpoint = "ws -h " + iceHost + " -p " + icePort;
             ObjectAdapter adapter = communicator.createObjectAdapterWithEndpoints(
                 "ChatAdapter", 
                 endpoint
@@ -62,11 +77,9 @@ public class IceChatServer {
             
             System.out.println("===========================================");
             System.out.println("Servidor Ice de Chat iniciado");
-            System.out.println("WebSocket endpoint: ws://" + iceHost + ":" + port);
+            System.out.println("WebSocket endpoint: ws://" + iceHost + ":" + icePort);
+            System.out.println("HTTP server en puerto: " + httpPort);
             System.out.println("===========================================");
-            
-            // Nota: No iniciamos un servidor HTTP separado porque Ice WebSocket
-            // puede manejar conexiones HTTP básicas para health checks de Render
             
             // Esperar hasta que se cierre
             communicator.waitForShutdown();
