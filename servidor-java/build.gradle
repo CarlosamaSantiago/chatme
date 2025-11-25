@@ -19,6 +19,8 @@ repositories {
 dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.1'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.1'
+    implementation 'com.zeroc:ice:3.7.6'
+    implementation 'com.zeroc:icessl:3.7.6'
 }
 
 test {

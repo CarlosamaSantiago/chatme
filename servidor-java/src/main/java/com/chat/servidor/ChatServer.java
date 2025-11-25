@@ -1,44 +1,73 @@
 package com.chat.servidor;
 
-import java.io.*;
-import java.net.*;
+import com.zeroc.Ice.*;
 import java.util.*;
 import java.util.concurrent.*;
 
 public class ChatServer {
 
-    private static final int PORT = 5000;
+    private static final int SOCKET_PORT = 5000;
+    private static final int ICE_PORT = 10000;
+    
+    // TUS MAPAS EXISTENTES (NO CAMBIAN)
     private static Map<String, ClientHandler> clientesConectados = new ConcurrentHashMap<>();
     private static Map<String, List<String>> grupos = new ConcurrentHashMap<>();
     private static Map<String, List<String>> historial = new ConcurrentHashMap<>();
     private static Map<String, String> usuarios = new ConcurrentHashMap<>();
+    private static Map<String, ClientHandler> usuariosConectados = new ConcurrentHashMap<>();
+    
     private ExecutorService pool;
     private static Semaphore semaphore;
-    private static Map<String, ClientHandler> usuariosConectados = new ConcurrentHashMap<>();
-
-    public static Map<String, ClientHandler> getUsuariosConectados() {
-        return usuariosConectados;
-    }
 
     public static void main(String[] args) {
-        ChatServer servidor = new ChatServer(PORT);
-        servidor.iniciar();
+        ChatServer servidor = new ChatServer();
+        servidor.iniciarServidores();
     }
 
-    public ChatServer(int puerto) {
+    public ChatServer() {
         this.semaphore = new Semaphore(5);
         this.pool = Executors.newCachedThreadPool();
     }
 
-    public void iniciar() {
+    public void iniciarServidores() {
         System.out.println("===========================================");
-        System.out.println("Servidor de Chat iniciado en puerto " + PORT);
+        System.out.println("INICIANDO SERVICIOS:");
+        System.out.println("• Servidor Socket tradicional: puerto " + SOCKET_PORT);
+        System.out.println("• Servidor Ice WebSocket: puerto " + ICE_PORT);
         System.out.println("===========================================");
 
-        try (ServerSocket serverSocket = new ServerSocket(PORT)) {
+        // Iniciar Ice en hilo separado
+        new Thread(this::iniciarIce).start();
+        
+        // Mantener servidor socket actual
+        iniciarSocket();
+    }
+
+    // NUEVO MÉTODO: Servidor Ice
+    private void iniciarIce() {
+        try {
+            Communicator communicator = Util.initialize();
+            ObjectAdapter adapter = communicator.createObjectAdapterWithEndpoints(
+                "ChatAdapter", "ws -p " + ICE_PORT);
+            
+            adapter.add(new ChatServiceI(), Util.stringToIdentity("ChatService"));
+            adapter.activate();
+            
+            System.out.println("✅ Servidor Ice WebSocket LISTO en puerto " + ICE_PORT);
+            communicator.waitForShutdown();
+            
+        } catch (Exception e) {
+            System.err.println("❌ Error en servidor Ice: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    // MÉTODO EXISTENTE (casi igual)
+    private void iniciarSocket() {
+        try (java.net.ServerSocket serverSocket = new java.net.ServerSocket(SOCKET_PORT)) {
             while (true) {
-                Socket clientSocket = serverSocket.accept();
-                System.out.println("Cliente conectado: " + clientSocket.getInetAddress());
+                java.net.Socket clientSocket = serverSocket.accept();
+                System.out.println("Cliente socket conectado: " + clientSocket.getInetAddress());
 
                 ClientHandler handler = new ClientHandler(clientSocket, this);
                 try {
@@ -48,14 +77,15 @@ public class ChatServer {
                     System.err.println("Error al adquirir semáforo: " + e.getMessage());
                 }
             }
-        } catch (IOException e) {
-            System.err.println("Error en el servidor: " + e.getMessage());
+        } catch (java.io.IOException e) {
+            System.err.println("Error en servidor socket: " + e.getMessage());
             e.printStackTrace();
         } finally {
             pool.shutdown();
         }
     }
 
+    // TUS MÉTODOS GETTERS EXISTENTES (NO CAMBIAN)
     public static Map<String, ClientHandler> getClientesConectados() {
         return clientesConectados;
     }
@@ -76,6 +106,11 @@ public class ChatServer {
         return semaphore;
     }
 
+    public static Map<String, ClientHandler> getUsuariosConectados() {
+        return usuariosConectados;
+    }
+
+    // MÉTODOS DE BROADCAST EXISTENTES (NO CAMBIAN)
     public static void broadcastToAll(String message) {
         for (ClientHandler client : clientesConectados.values()) {
             client.enviarRespuesta(message);
@@ -88,5 +123,4 @@ public class ChatServer {
             client.enviarRespuesta(message);
         }
     }
-
 }
