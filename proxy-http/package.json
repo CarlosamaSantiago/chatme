@@ -6,8 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "node index.js",
-    "generate-ice": "slice2js --output-dir generated slice/Chat.ice",
-    "prestart": "npm run generate-ice"
+    "generate-ice": "slice2js --output-dir generated slice/Chat.ice"
   },
   "keywords": [],
   "author": "",
