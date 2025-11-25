@@ -53,11 +53,19 @@
             </div>
 
             <div class="bottom-wrapper" id="messageInputWrapper" style="display: none;">
+                <!-- Input de texto -->
                 <input
-                    id="messageInput"
-                    class="message-input"
-                    placeholder="Escribe un mensaje..."
+                        id="messageInput"
+                        class="message-input"
+                        placeholder="Escribe un mensaje..."
                 />
+
+                <!-- Botones de voz -->
+                <button class="voice-button" id="btnStartVoice" title="Grabar nota de voz">🎙</button>
+                <button class="voice-button" id="btnStopVoice" title="Detener" disabled>⏹</button>
+                <button class="voice-button" id="btnSendVoice" title="Enviar nota" disabled>📤</button>
+
+                <!-- Botón enviar texto -->
                 <button class="send-button" onclick="sendMessage()">Enviar</button>
             </div>
         </div>

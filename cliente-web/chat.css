@@ -289,3 +289,34 @@ body {
 .send-button:hover {
     background: #075e54;
 }
+
+.voice-button {
+    background: #ffffff;
+    color: #075e54;
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.3s, transform 0.1s;
+}
+
+.voice-button:hover:not(:disabled) {
+    background: #e0e0e0;
+    transform: scale(1.05);
+}
+
+.voice-button:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+/* Para que el <audio> se vea bien en los mensajes */
+.message audio {
+    max-width: 220px;
+    display: block;
+}
