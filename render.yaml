@@ -20,8 +20,6 @@ services:
     buildCommand: npm install
     startCommand: npm start
     envVars:
-      - key: PORT
-        generateValue: true
       - key: ICE_SERVER_HOST
         fromService:
           name: chatme-java-server

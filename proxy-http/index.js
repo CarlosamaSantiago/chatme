@@ -528,11 +528,21 @@ function setupIceMessageHandler() {
 setupIceMessageHandler();
 
 // Iniciar servidor y conectar a Ice
-const PORT = parseInt(process.env.PORT || '3000', 10);
-if (isNaN(PORT)) {
-    console.error('❌ PORT inválido:', process.env.PORT);
-    process.exit(1);
+// Render puede asignar PORT dinámicamente, pero si es inválido, usar puerto por defecto
+let PORT = 3000;
+if (process.env.PORT) {
+    const parsedPort = parseInt(process.env.PORT, 10);
+    if (!isNaN(parsedPort) && parsedPort > 0 && parsedPort < 65536) {
+        PORT = parsedPort;
+    } else {
+        console.warn('⚠️  PORT inválido de Render:', process.env.PORT);
+        console.warn('⚠️  Usando puerto por defecto:', PORT);
+    }
+} else {
+    console.log('ℹ️  PORT no definido, usando puerto por defecto:', PORT);
 }
+
+console.log('🔧 Iniciando servidor en puerto:', PORT);
 server.listen(PORT, '0.0.0.0', async () => {
     console.log('===========================================');
     console.log(`Proxy HTTP en puerto ${PORT}`);
