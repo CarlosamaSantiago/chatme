@@ -97,7 +97,6 @@ proxy-http/.env.local
 proxy-http/.env.*.local
 
 # Archivos generados por Ice (Node.js)
-proxy-http/generated/
 proxy-http/node_modules/
 
 # ============================================
