@@ -48,7 +48,8 @@ public class ClientHandler implements Runnable {
                 handleCreateGroup(message);
             } else if (message.contains("\"action\":\"SEND_MESSAGE\"")) {
                 handleSendMessage(message);
-            } else if (message.contains("\"action\":\"SEND_VOICE_NOTE\"")) {
+            } else if (message.contains("\"action\":\"SEND_VOICE_NOTE\"") || 
+                       message.contains("\"action\":\"SEND_AUDIO\"")) {
                 handleSendVoiceNote(message);
             } else if (message.contains("\"action\":\"START_CALL\"")) {
                 handleStartCall(message);

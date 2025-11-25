@@ -71,11 +71,11 @@ export class IceChatClient {
         }
     }
 
-    async sendVoiceNote(from, to, isGroup, audioData) {
+    async sendAudio(from, to, audioData, isGroup) {
         try {
             // Convertir ArrayBuffer a byte array
             const bytes = new Uint8Array(audioData);
-            await this.chatService.sendVoiceNote(from, to, isGroup, bytes);
+            await this.chatService.sendAudio(from, to, bytes, isGroup);
         } catch (error) {
             console.error('Error enviando nota de voz:', error);
             throw error;
@@ -169,21 +169,9 @@ class MessageCallbackI extends Chat.MessageCallback {
         }
     }
 
-    onUserJoined(username, current) {
-        if (this.callback && this.callback.onUserJoined) {
-            this.callback.onUserJoined(username);
-        }
-    }
-
-    onUserLeft(username, current) {
-        if (this.callback && this.callback.onUserLeft) {
-            this.callback.onUserLeft(username);
-        }
-    }
-
-    onGroupCreated(groupName, current) {
-        if (this.callback && this.callback.onGroupCreated) {
-            this.callback.onGroupCreated(groupName);
+    onGroupMessage(msg, groupName, current) {
+        if (this.callback && this.callback.onGroupMessage) {
+            this.callback.onGroupMessage(msg, groupName);
         }
     }
 }
