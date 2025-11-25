@@ -36,11 +36,8 @@ class IceBridge {
             console.log('🔌 Inicializando Ice Communicator...');
             console.log('🔧 Intentando conectar a:', `${this.SERVICE_NAME}:${this.ICE_ENDPOINT}`);
             
-            // Inicializar communicator con timeout más largo para Render
-            const properties = Ice.createProperties();
-            properties.setProperty('Ice.Override.Timeout', '30000'); // 30 segundos
-            properties.setProperty('Ice.Override.ConnectTimeout', '30000');
-            this.communicator = Ice.initialize([], properties);
+            // Inicializar communicator (sin propiedades por ahora, los timeouts se configuran en el proxy)
+            this.communicator = Ice.initialize();
             
             // Obtener proxy del ChatService primero
             const serviceProxy = this.communicator.stringToProxy(
