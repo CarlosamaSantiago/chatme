@@ -15,6 +15,12 @@ class IceBridge {
         const icePort = process.env.ICE_SERVER_PORT || '10000';
         this.ICE_ENDPOINT = `ws -h ${iceHost} -p ${icePort}`;
         this.SERVICE_NAME = 'ChatService';
+        
+        // Log de configuración para debugging
+        console.log('🔧 [IceBridge] Configuración:');
+        console.log('   ICE_SERVER_HOST:', iceHost);
+        console.log('   ICE_SERVER_PORT:', icePort);
+        console.log('   ICE_ENDPOINT:', this.ICE_ENDPOINT);
         this.communicator = null;
         this.chatService = null;
         this.callbackAdapter = null;
@@ -28,14 +34,19 @@ class IceBridge {
     async connect() {
         try {
             console.log('🔌 Inicializando Ice Communicator...');
+            console.log('🔧 Intentando conectar a:', `${this.SERVICE_NAME}:${this.ICE_ENDPOINT}`);
             
-            // Inicializar communicator
-            this.communicator = Ice.initialize();
+            // Inicializar communicator con timeout más largo para Render
+            const properties = Ice.createProperties();
+            properties.setProperty('Ice.Override.Timeout', '30000'); // 30 segundos
+            properties.setProperty('Ice.Override.ConnectTimeout', '30000');
+            this.communicator = Ice.initialize([], properties);
             
             // Obtener proxy del ChatService primero
             const serviceProxy = this.communicator.stringToProxy(
                 `${this.SERVICE_NAME}:${this.ICE_ENDPOINT}`
             );
+            console.log('🔧 Proxy creado, intentando checkedCast...');
             
             // checkedCast puede ser asíncrono en Ice para Node.js
             this.chatService = await Chat.ChatServicePrx.checkedCast(serviceProxy);
