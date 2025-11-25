@@ -1,10 +1,13 @@
 {
   "name": "proxy-http",
   "version": "1.0.0",
-  "description": "",
+  "description": "Proxy HTTP con WebSocket para chat RPC",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js",
+    "dev": "node index.js",
+    "generate-ice": "slice2js --output-dir generated slice/Chat.ice",
+    "prestart": "npm run generate-ice"
   },
   "keywords": [],
   "author": "",
@@ -13,6 +16,13 @@
   "dependencies": {
     "body-parser": "^2.2.0",
     "cors": "^2.8.5",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "ice": "^3.7.100",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.28.5",
+    "@babel/preset-env": "^7.28.5",
+    "babel-loader": "^10.0.0"
   }
 }
