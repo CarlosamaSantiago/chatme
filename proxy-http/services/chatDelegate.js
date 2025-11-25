@@ -1,21 +1,95 @@
 const Ice = require('ice').Ice;
 
-// Variables globales para Ice
 let communicator = null;
-let chatService = null;
+let chatMaster = null;
+let chatWorker = null;
+let currentWorkerId = null;
+let updateCallback = null;
+
+// Implementación del Worker
+class ChatWorkerI extends Chat.ChatWorker {
+    deliverMessage(msg, current) {
+        if (updateCallback) {
+            const messageData = {
+                action: 'MESSAGE',
+                message: {
+                    from: msg.from,
+                    to: msg.to,
+                    message: msg.message,
+                    timestamp: msg.timestamp,
+                    isGroup: msg.isGroup
+                }
+            };
+            console.log("📨 Mensaje recibido via Ice:", messageData);
+            updateCallback(JSON.stringify(messageData));
+        }
+    }
+
+    updateUserList(users, current) {
+        if (updateCallback) {
+            const userListData = {
+                action: 'USER_LIST',
+                users: users
+            };
+            console.log("👥 Lista de usuarios actualizada:", users);
+            updateCallback(JSON.stringify(userListData));
+        }
+    }
+
+    updateGroupList(groups, current) {
+        if (updateCallback) {
+            const groupListData = {
+                action: 'GROUP_LIST', 
+                groups: groups
+            };
+            console.log("👥 Lista de grupos actualizada:", groups);
+            updateCallback(JSON.stringify(groupListData));
+        }
+    }
+}
 
 // Inicializar conexión Ice
-async function initializeIce() {
+async function initializeIce(callback) {
+    updateCallback = callback;
     try {
-        if (communicator) return true;
-        
+        if (communicator) {
+            console.log("✅ Ice ya inicializado");
+            return true;
+        }
+
+        console.log("🔄 Inicializando Ice...");
         communicator = Ice.initialize();
-        const base = communicator.stringToProxy("ChatService:ws -h localhost -p 10000");
-        chatService = await Chat.ChatServicePrx.checkedCast(base);
-        console.log("✅ Conexión Ice WebSocket establecida");
+        
+        // Conectar al Master
+        console.log("🔗 Conectando a ChatMaster...");
+        const masterBase = communicator.stringToProxy("ChatMaster:ws -h localhost -p 10000");
+        chatMaster = await Chat.ChatMasterPrx.checkedCast(masterBase);
+        
+        if (!chatMaster) {
+            throw new Error("No se pudo conectar al ChatMaster");
+        }
+        
+        // Registrar este Worker
+        currentWorkerId = `worker_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        console.log("👷 Registrando worker:", currentWorkerId);
+        const adapter = communicator.createObjectAdapterWithEndpoints("ChatWorker", "ws");
+        chatWorker = new ChatWorkerI();
+        const workerPrx = Chat.ChatWorkerPrx.uncheckedCast(adapter.addWithUUID(chatWorker));
+        adapter.activate();
+        
+        await chatMaster.registerWorker(currentWorkerId, workerPrx);
+        
+        console.log("✅ Worker Ice registrado exitosamente:", currentWorkerId);
         return true;
     } catch (ex) {
-        console.error("❌ Error conectando con Ice:", ex);
+        console.error("❌ Error inicializando Ice:", ex);
+        if (communicator) {
+            try {
+                communicator.destroy();
+            } catch (e) {}
+            communicator = null;
+        }
         return false;
     }
 }
@@ -23,54 +97,59 @@ async function initializeIce() {
 // Función principal modificada
 async function sendToChatServer(json) {
     try {
-        // Inicializar Ice si no está listo
-        if (!chatService) {
-            const connected = await initializeIce();
-            if (!connected) {
-                throw new Error("No se pudo conectar al servidor Ice");
+        if (!chatMaster) {
+            const initialized = await initializeIce(() => {});
+            if (!initialized) {
+                throw new Error("No se pudo inicializar Ice");
             }
         }
 
         const data = JSON.parse(json);
+        console.log("📤 Enviando acción:", data.action);
         
         switch(data.action) {
             case 'REGISTER':
-                await chatService.register(data.username);
+                await chatMaster.registerUser(data.username, currentWorkerId);
                 return JSON.stringify({action: 'REGISTERED', username: data.username});
                 
             case 'CREATE_GROUP':
-                await chatService.createGroup(data.groupName);
+                await chatMaster.createGroup(data.groupName, currentWorkerId);
                 return JSON.stringify({action: 'GROUP_CREATED', groupName: data.groupName});
                 
             case 'SEND_MESSAGE':
-                await chatService.sendMessage(data.from, data.to, data.message, data.isGroup === true);
+                const iceMsg = new Chat.Message(
+                    data.from, 
+                    data.to, 
+                    data.message, 
+                    new Date().toString(), 
+                    data.isGroup === true
+                );
+                await chatMaster.sendMessage(iceMsg);
                 return JSON.stringify({action: 'MESSAGE_SENT'});
                 
             case 'GET_USERS':
-                const users = await chatService.getUsers();
+                const users = await chatMaster.getUsers();
                 return JSON.stringify({users: users});
                 
             case 'GET_GROUPS':
-            case 'LIST_GROUPS':
-                const groups = await chatService.getGroups();
+                const groups = await chatMaster.getGroups();
                 return JSON.stringify({action: 'GROUP_LIST', groups: groups});
                 
             case 'GET_HISTORY':
-                const history = await chatService.getHistory(data.target, data.from, data.isGroup === true);
-                // Convertir de Message[] a JSON strings
+                const history = await chatMaster.getHistory(data.target, data.from, data.isGroup === true);
                 const messages = history.map(msg => 
                     JSON.stringify({
-                        from: msg.from,
-                        to: msg.to,
+                        from: msg.from, 
+                        to: msg.to, 
                         message: msg.message,
-                        timestamp: msg.timestamp,
+                        timestamp: msg.timestamp, 
                         isGroup: msg.isGroup
                     })
                 );
                 return JSON.stringify({action: 'HISTORY', messages: messages});
                 
             default:
-                return JSON.stringify({error: 'Acción no reconocida'});
+                return JSON.stringify({error: 'Acción no reconocida: ' + data.action});
         }
     } catch (ex) {
         console.error('❌ Error en comunicación Ice:', ex);

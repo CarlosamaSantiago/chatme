@@ -14,10 +14,20 @@ module Chat {
         string reason;
     };
 
-    interface ChatService {
-        void register(string username) throws ChatException;
-        void createGroup(string groupName) throws ChatException;
-        void sendMessage(string from, string to, string message, bool isGroup) throws ChatException;
+    // Interfaz para Workers (manejo de mensajes)
+    interface ChatWorker {
+        void deliverMessage(Message msg);
+        void updateUserList(StringList users);
+        void updateGroupList(StringList groups);
+    };
+
+    // Interfaz para Master (coordinación)
+    interface ChatMaster {
+        void registerWorker(string workerId, ChatWorker workerPrx);
+        void unregisterWorker(string workerId);
+        void registerUser(string username, string workerId) throws ChatException;
+        void createGroup(string groupName, string workerId) throws ChatException;
+        void sendMessage(Message msg) throws ChatException;
         StringList getUsers();
         StringList getGroups();
         MessageList getHistory(string target, string fromUser, bool isGroup);

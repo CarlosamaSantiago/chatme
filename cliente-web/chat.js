@@ -8,8 +8,7 @@ class ChatApp {
             '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9'
         ];
         this.API_URL = 'http://localhost:3000';
-        this.pollingInterval = null;
-        this.lastMessageCount = 0;
+        this.eventSource = null;
 
         this.init();
     }
@@ -17,7 +16,7 @@ class ChatApp {
     init() {
         this.getUsername();
         this.setupEventListeners();
-        setInterval(() => this.refreshLists(), 5000); // cada 5 segs
+        this.setupRealTimeUpdates();
     }
 
     getUsername() {
@@ -25,9 +24,43 @@ class ChatApp {
         document.getElementById('usernameDisplay').textContent = this.username;
         document.getElementById('userAvatar').textContent = this.username[0].toUpperCase();
         document.getElementById('userAvatar').style.backgroundColor = this.getAvatarColor(this.username);
-        this.refreshLists();
+        
         this.registerUser();
+        this.refreshLists();
+    }
 
+    setupRealTimeUpdates() {
+        this.eventSource = new EventSource(this.API_URL + '/updates');
+        
+        this.eventSource.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                console.log("📨 Evento recibido:", data);
+                this.handleRealTimeUpdate(data);
+            } catch (error) {
+                console.error('Error procesando evento:', error);
+            }
+        };
+
+        this.eventSource.onerror = (error) => {
+            console.error('Error en conexión SSE:', error);
+        };
+    }
+
+    handleRealTimeUpdate(data) {
+        switch(data.action) {
+            case 'MESSAGE':
+                this.displayMessage(data.message);
+                break;
+            case 'USER_LIST':
+                this.updateUserList(data.users);
+                break;
+            case 'GROUP_LIST':
+                this.updateGroupList(data.groups);
+                break;
+            default:
+                console.log('Evento no manejado:', data);
+        }
     }
 
     async registerUser() {
@@ -61,17 +94,11 @@ class ChatApp {
                     })
                 });
 
-                this.displayMessage({
-                    from: this.username,
-                    to: this.targetUser,
-                    message: message
-                });
-
+                // El mensaje se mostrará via SSE cuando llegue del servidor
                 messageInput.value = '';
-                setTimeout(() => this.loadHistory(this.targetUser), 500);
             } catch (error) {
                 console.error('Error enviando mensaje:', error);
-                alert('Error al enviar mensaje');
+                alert('Error al enviar mensaje: ' + error.message);
             }
         }
     }
@@ -90,9 +117,10 @@ class ChatApp {
 
                 alert(`Grupo creado: ${groupName}`);
                 groupInput.value = '';
-                this.loadGroups();
+                // La lista de grupos se actualizará via SSE
             } catch (error) {
                 console.error('Error creando grupo:', error);
+                alert('Error creando grupo: ' + error.message);
             }
         }
     }
@@ -103,7 +131,6 @@ class ChatApp {
         this.isGroupChat = false;
         this.updateChatInterface();
         this.loadHistory(user);
-        this.startPolling();
     }
 
     selectGroup(group) {
@@ -111,7 +138,6 @@ class ChatApp {
         this.isGroupChat = true;
         this.updateChatInterface();
         this.loadHistory(group);
-        this.startPolling();
     }
 
     async loadHistory(target) {
@@ -132,25 +158,11 @@ class ChatApp {
         }
     }
 
-    startPolling() {
-        this.stopPolling();
-        this.pollingInterval = setInterval(() => {
-            if (this.targetUser) this.loadHistory(this.targetUser);
-        }, 2000);
-    }
-
-    stopPolling() {
-        if (this.pollingInterval) {
-            clearInterval(this.pollingInterval);
-            this.pollingInterval = null;
-        }
-    }
-
     async refreshLists() {
         await this.loadGroups();
         await this.loadUsers();
     }
-    s
+
     async loadGroups() {
         try {
             const response = await fetch(`${this.API_URL}/getGroups`, {
@@ -245,14 +257,13 @@ class ChatApp {
                 <div class="text">${this.escapeHtml(m.message)}</div>
                 <div class="timestamp">${new Date().toLocaleTimeString()}</div>
             </div>`;
-        return div;s
+        return div;
     }
 
     updateChatInterface() {
         document.getElementById('chatTarget').textContent = this.targetUser;
         document.getElementById('groupBadge').style.display = this.isGroupChat ? 'inline-block' : 'none';
 
-        // Mostrar el input solo si hay un target seleccionado
         const inputWrapper = document.getElementById('messageInputWrapper');
         if (this.targetUser) {
             inputWrapper.style.display = 'flex';
@@ -260,9 +271,7 @@ class ChatApp {
             inputWrapper.style.display = 'none';
         }
     }
-
-
-
+sssss
     getAvatarColor(u) {
         return this.colors[u.charCodeAt(0) % this.colors.length];
     }

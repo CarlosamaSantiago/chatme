@@ -6,121 +6,250 @@ import java.util.concurrent.*;
 
 public class ChatServer {
 
-    private static final int SOCKET_PORT = 5000;
-    private static final int ICE_PORT = 10000;
-    
-    // TUS MAPAS EXISTENTES (NO CAMBIAN)
-    private static Map<String, ClientHandler> clientesConectados = new ConcurrentHashMap<>();
-    private static Map<String, List<String>> grupos = new ConcurrentHashMap<>();
-    private static Map<String, List<String>> historial = new ConcurrentHashMap<>();
-    private static Map<String, String> usuarios = new ConcurrentHashMap<>();
-    private static Map<String, ClientHandler> usuariosConectados = new ConcurrentHashMap<>();
-    
-    private ExecutorService pool;
-    private static Semaphore semaphore;
-
     public static void main(String[] args) {
-        ChatServer servidor = new ChatServer();
-        servidor.iniciarServidores();
-    }
-
-    public ChatServer() {
-        this.semaphore = new Semaphore(5);
-        this.pool = Executors.newCachedThreadPool();
-    }
-
-    public void iniciarServidores() {
-        System.out.println("===========================================");
-        System.out.println("INICIANDO SERVICIOS:");
-        System.out.println("• Servidor Socket tradicional: puerto " + SOCKET_PORT);
-        System.out.println("• Servidor Ice WebSocket: puerto " + ICE_PORT);
-        System.out.println("===========================================");
-
-        // Iniciar Ice en hilo separado
-        new Thread(this::iniciarIce).start();
-        
-        // Mantener servidor socket actual
-        iniciarSocket();
-    }
-
-    // NUEVO MÉTODO: Servidor Ice
-    private void iniciarIce() {
-        try {
-            Communicator communicator = Util.initialize();
-            ObjectAdapter adapter = communicator.createObjectAdapterWithEndpoints(
-                "ChatAdapter", "ws -p " + ICE_PORT);
+        try (Communicator communicator = Util.initialize(args)) {
+            ObjectAdapter adapter = communicator.createObjectAdapterWithEndpoints("ChatMaster", "ws -p 10000");
             
-            adapter.add(new ChatServiceI(), Util.stringToIdentity("ChatService"));
+            ChatMasterI master = new ChatMasterI();
+            adapter.add(master, Util.stringToIdentity("ChatMaster"));
             adapter.activate();
             
-            System.out.println("✅ Servidor Ice WebSocket LISTO en puerto " + ICE_PORT);
+            System.out.println("✅ ChatMaster Ice iniciado en puerto 10000 (WebSocket)");
             communicator.waitForShutdown();
-            
         } catch (Exception e) {
-            System.err.println("❌ Error en servidor Ice: " + e.getMessage());
+            System.err.println("❌ Error en servidor: " + e.getMessage());
             e.printStackTrace();
         }
     }
+}
 
-    // MÉTODO EXISTENTE (casi igual)
-    private void iniciarSocket() {
-        try (java.net.ServerSocket serverSocket = new java.net.ServerSocket(SOCKET_PORT)) {
-            while (true) {
-                java.net.Socket clientSocket = serverSocket.accept();
-                System.out.println("Cliente socket conectado: " + clientSocket.getInetAddress());
+// Implementación del Master
+class ChatMasterI implements Chat.ChatMaster {
+    
+    // Mapa de workers conectados
+    private static Map<String, Chat.ChatWorkerPrx> workers = new ConcurrentHashMap<>();
+    private static Map<String, String> userToWorker = new ConcurrentHashMap<>();
+    
+    // Estructuras de datos
+    private static Map<String, List<String>> grupos = new ConcurrentHashMap<>();
+    private static Map<String, List<String>> historial = new ConcurrentHashMap<>();
+    private static Map<String, String> usuarios = new ConcurrentHashMap<>(); // workerId -> username
 
-                ClientHandler handler = new ClientHandler(clientSocket, this);
+    @Override
+    public void registerWorker(String workerId, Chat.ChatWorker workerPrx, Current current) {
+        workers.put(workerId, workerPrx);
+        System.out.println("✅ Worker registrado: " + workerId);
+    }
+
+    @Override
+    public void unregisterWorker(String workerId, Current current) {
+        workers.remove(workerId);
+        // Remover usuario asociado si existe
+        String username = usuarios.get(workerId);
+        if (username != null) {
+            userToWorker.remove(username);
+            usuarios.remove(workerId);
+            broadcastUserList();
+        }
+        System.out.println("❌ Worker desconectado: " + workerId);
+    }
+
+    @Override
+    public void registerUser(String username, String workerId, Current current) throws Chat.ChatException {
+        if (userToWorker.containsKey(username)) {
+            throw new Chat.ChatException("Usuario ya existe: " + username);
+        }
+        
+        // Si el worker ya tenía usuario, limpiar
+        String oldUser = usuarios.get(workerId);
+        if (oldUser != null) {
+            userToWorker.remove(oldUser);
+        }
+        
+        usuarios.put(workerId, username);
+        userToWorker.put(username, workerId);
+        System.out.println("✅ Usuario registrado: " + username + " en worker: " + workerId);
+        
+        broadcastUserList();
+    }
+
+    @Override
+    public void createGroup(String groupName, String workerId, Current current) throws Chat.ChatException {
+        if (grupos.containsKey(groupName)) {
+            throw new Chat.ChatException("El grupo ya existe: " + groupName);
+        }
+        
+        grupos.put(groupName, new ArrayList<>());
+        historial.put(groupName, new ArrayList<>());
+        System.out.println("✅ Grupo creado: " + groupName + " por worker: " + workerId);
+        
+        broadcastGroupList();
+    }
+
+    @Override
+    public void sendMessage(Chat.Message msg, Current current) throws Chat.ChatException {
+        // Validar que el remitente existe
+        if (!userToWorker.containsKey(msg.from)) {
+            throw new Chat.ChatException("Remitente no registrado: " + msg.from);
+        }
+
+        // Guardar en historial
+        String historyKey = getHistoryKey(msg.from, msg.to, msg.isGroup);
+        String messageJson = buildMessageJson(msg);
+        historial.computeIfAbsent(historyKey, k -> new ArrayList<>()).add(messageJson);
+
+        System.out.println("📨 Mensaje de " + msg.from + " a " + msg.to + ": " + msg.message);
+
+        // Entregar mensaje
+        if (msg.isGroup) {
+            // Broadcast a todos los workers
+            broadcastToAllWorkers(msg);
+        } else {
+            // Enviar al destinatario
+            deliverToUser(msg.to, msg);
+            // También enviar al remitente para que vea su mensaje
+            deliverToUser(msg.from, msg);
+        }
+    }
+
+    @Override
+    public Chat.StringList getUsers(Current current) {
+        Chat.StringList list = new Chat.StringList();
+        list.addAll(userToWorker.keySet());
+        return list;
+    }
+
+    @Override
+    public Chat.StringList getGroups(Current current) {
+        Chat.StringList list = new Chat.StringList();
+        list.addAll(grupos.keySet());
+        return list;
+    }
+
+    @Override
+    public Chat.MessageList getHistory(String target, String fromUser, boolean isGroup, Current current) {
+        String historyKey = getHistoryKey(fromUser, target, isGroup);
+        List<String> historyJson = historial.getOrDefault(historyKey, new ArrayList<>());
+        
+        Chat.MessageList messageList = new Chat.MessageList();
+        for (String json : historyJson) {
+            Chat.Message msg = parseJsonToMessage(json);
+            if (msg != null) {
+                messageList.add(msg);
+            }
+        }
+        return messageList;
+    }
+
+    // ===== MÉTODOS DE BROADCAST =====
+    
+    private void broadcastUserList() {
+        Chat.StringList users = getUsers(null);
+        for (Chat.ChatWorkerPrx worker : workers.values()) {
+            try {
+                worker.updateUserList(users);
+            } catch (Exception e) {
+                System.err.println("Error broadcasting user list: " + e.getMessage());
+            }
+        }
+    }
+
+    private void broadcastGroupList() {
+        Chat.StringList groups = getGroups(null);
+        for (Chat.ChatWorkerPrx worker : workers.values()) {
+            try {
+                worker.updateGroupList(groups);
+            } catch (Exception e) {
+                System.err.println("Error broadcasting group list: " + e.getMessage());
+            }
+        }
+    }
+
+    private void broadcastToAllWorkers(Chat.Message msg) {
+        for (Chat.ChatWorkerPrx worker : workers.values()) {
+            try {
+                worker.deliverMessage(msg);
+            } catch (Exception e) {
+                System.err.println("Error broadcasting message: " + e.getMessage());
+            }
+        }
+    }
+
+    private void deliverToUser(String username, Chat.Message msg) {
+        String workerId = userToWorker.get(username);
+        if (workerId != null) {
+            Chat.ChatWorkerPrx worker = workers.get(workerId);
+            if (worker != null) {
                 try {
-                    semaphore.acquire();
-                    pool.execute(handler);
-                } catch (InterruptedException e) {
-                    System.err.println("Error al adquirir semáforo: " + e.getMessage());
+                    worker.deliverMessage(msg);
+                } catch (Exception e) {
+                    System.err.println("Error delivering to user " + username + ": " + e.getMessage());
                 }
             }
-        } catch (java.io.IOException e) {
-            System.err.println("Error en servidor socket: " + e.getMessage());
-            e.printStackTrace();
-        } finally {
-            pool.shutdown();
         }
     }
 
-    // TUS MÉTODOS GETTERS EXISTENTES (NO CAMBIAN)
-    public static Map<String, ClientHandler> getClientesConectados() {
-        return clientesConectados;
+    // ===== MÉTODOS AUXILIARES =====
+    
+    private String getHistoryKey(String from, String to, boolean isGroup) {
+        if (isGroup) return to;
+        List<String> pair = Arrays.asList(from, to);
+        Collections.sort(pair);
+        return pair.get(0) + "_" + pair.get(1);
     }
 
-    public static Map<String, List<String>> getGrupos() {
-        return grupos;
+    private String buildMessageJson(Chat.Message msg) {
+        return String.format("{\"from\":\"%s\",\"to\":\"%s\",\"message\":\"%s\",\"timestamp\":\"%s\",\"isGroup\":%s}",
+            escapeJson(msg.from), escapeJson(msg.to), escapeJson(msg.message), msg.timestamp, msg.isGroup);
     }
 
-    public static Map<String, List<String>> getHistorial() {
-        return historial;
-    }
-
-    public static Map<String, String> getUsuarios() {
-        return usuarios;
-    }
-
-    public static Semaphore getSemaphore() {
-        return semaphore;
-    }
-
-    public static Map<String, ClientHandler> getUsuariosConectados() {
-        return usuariosConectados;
-    }
-
-    // MÉTODOS DE BROADCAST EXISTENTES (NO CAMBIAN)
-    public static void broadcastToAll(String message) {
-        for (ClientHandler client : clientesConectados.values()) {
-            client.enviarRespuesta(message);
+    private Chat.Message parseJsonToMessage(String json) {
+        try {
+            String from = extractValue(json, "from");
+            String to = extractValue(json, "to");
+            String message = extractValue(json, "message");
+            String timestamp = extractValue(json, "timestamp");
+            boolean isGroup = Boolean.parseBoolean(extractValue(json, "isGroup"));
+            return new Chat.Message(from, to, message, timestamp, isGroup);
+        } catch (Exception e) {
+            System.err.println("Error parsing JSON to Message: " + e.getMessage());
+            return null;
         }
     }
 
-    public static void sendToUser(String username, String message) {
-        ClientHandler client = usuariosConectados.get(username);
-        if (client != null) {
-            client.enviarRespuesta(message);
+    private String extractValue(String json, String key) {
+        try {
+            String searchKey = "\"" + key + "\":\"";
+            int start = json.indexOf(searchKey);
+            if (start == -1) {
+                searchKey = "\"" + key + "\":";
+                start = json.indexOf(searchKey);
+                if (start == -1) return "";
+
+                start += searchKey.length();
+                int end = json.indexOf(",", start);
+                if (end == -1) end = json.indexOf("}", start);
+                if (end == -1) return "";
+
+                return json.substring(start, end).trim().replace("\"", "");
+            }
+
+            start += searchKey.length();
+            int end = json.indexOf("\"", start);
+            if (end == -1) return "";
+
+            return json.substring(start, end);
+        } catch (Exception e) {
+            return "";
         }
+    }
+
+    private String escapeJson(String str) {
+        if (str == null) return "";
+        return str.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
     }
 }
