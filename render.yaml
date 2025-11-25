@@ -3,9 +3,8 @@ services:
   - type: web
     name: chatme-java-server
     env: docker
-    dockerfilePath: ./servidor-java/Dockerfile
+    dockerfilePath: ./Dockerfile
     dockerContext: ./servidor-java
-    rootDir: servidor-java
     envVars:
       - key: PORT
         value: 10000
