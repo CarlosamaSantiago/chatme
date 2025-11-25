@@ -1,3 +1,5 @@
+import iceDelegate from './services/iceDelegate.js';
+
 class ChatApp {
     constructor() {
         this.username = '';
@@ -7,14 +9,36 @@ class ChatApp {
             '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
             '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9'
         ];
-        this.API_URL = 'http://localhost:3000';
         this.pollingInterval = null;
         this.lastMessageCount = 0;
 
         this.init();
     }
 
-    init() {
+    async init() {
+        // Inicializar ICE
+        await iceDelegate.init();
+        
+        // Configurar listeners para eventos del observer
+        window.addEventListener('newUser', (e) => {
+            this.refreshLists();
+        });
+        
+        window.addEventListener('newGroup', (e) => {
+            this.refreshLists();
+        });
+        
+        window.addEventListener('newMessage', (e) => {
+            const message = e.detail;
+            // Si el mensaje es para el chat actual, actualizar
+            if ((this.isGroupChat && message.to === this.targetUser) ||
+                (!this.isGroupChat && 
+                 ((message.from === this.targetUser && message.to === this.username) ||
+                  (message.to === this.targetUser && message.from === this.username)))) {
+                this.loadHistory(this.targetUser);
+            }
+        });
+        
         this.getUsername();
         this.setupEventListeners();
         setInterval(() => this.refreshLists(), 5000); // cada 5 segs
@@ -32,13 +56,8 @@ class ChatApp {
 
     async registerUser() {
         try {
-            const response = await fetch(`${this.API_URL}/register`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: this.username })
-            });
-            const result = await response.json();
-            console.log('Usuario registrado:', result);
+            await iceDelegate.registerUser(this.username);
+            console.log('Usuario registrado:', this.username);
         } catch (err) {
             console.error('Error registrando usuario', err);
         }
@@ -50,16 +69,7 @@ class ChatApp {
 
         if (message && this.targetUser) {
             try {
-                await fetch(`${this.API_URL}/sendMessage`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        from: this.username,
-                        to: this.targetUser,
-                        message: message,
-                        isGroup: this.isGroupChat
-                    })
-                });
+                await iceDelegate.sendMessage(this.username, this.targetUser, message, this.isGroupChat);
 
                 this.displayMessage({
                     from: this.username,
@@ -82,17 +92,13 @@ class ChatApp {
 
         if (groupName) {
             try {
-                await fetch(`${this.API_URL}/createGroup`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ groupName })
-                });
-
+                await iceDelegate.createGroup(groupName);
                 alert(`Grupo creado: ${groupName}`);
                 groupInput.value = '';
                 this.loadGroups();
             } catch (error) {
                 console.error('Error creando grupo:', error);
+                alert('Error al crear grupo: ' + error.message);
             }
         }
     }
@@ -116,17 +122,20 @@ class ChatApp {
 
     async loadHistory(target) {
         try {
-            const response = await fetch(`${this.API_URL}/getHistory`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    target,
-                    from: this.username,
-                    isGroup: this.isGroupChat
-                })
-            });
-            const result = await response.json();
-            if (result.messages) this.displayHistory(result.messages);
+            const messages = await iceDelegate.getHistory(target, this.username, this.isGroupChat);
+            if (messages && messages.length > 0) {
+                // Convertir MessageDTO a formato esperado
+                const formattedMessages = messages.map(msg => ({
+                    from: msg.from,
+                    to: msg.to,
+                    message: msg.message,
+                    timestamp: msg.timestamp,
+                    isGroup: msg.isGroup
+                }));
+                this.displayHistory(formattedMessages);
+            } else {
+                this.displayHistory([]);
+            }
         } catch (error) {
             console.error('Error cargando historial:', error);
         }
@@ -150,16 +159,13 @@ class ChatApp {
         await this.loadGroups();
         await this.loadUsers();
     }
-    s
+
     async loadGroups() {
         try {
-            const response = await fetch(`${this.API_URL}/getGroups`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({})
-            });
-            const result = await response.json();
-            if (result.groups) this.updateGroupList(result.groups);
+            const groups = await iceDelegate.getGroups();
+            if (groups) {
+                this.updateGroupList(Array.from(groups));
+            }
         } catch (error) {
             console.error('Error cargando grupos:', error);
         }
@@ -167,13 +173,10 @@ class ChatApp {
 
     async loadUsers() {
         try {
-            const response = await fetch(`${this.API_URL}/getUsers`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({})
-            });
-            const result = await response.json();
-            if (result.users) this.updateUserList(result.users);
+            const users = await iceDelegate.getUsers();
+            if (users) {
+                this.updateUserList(Array.from(users));
+            }
         } catch (error) {
             console.error('Error cargando usuarios:', error);
         }
@@ -243,9 +246,9 @@ class ChatApp {
             <div class="text-wrapper">
                 ${!own ? `<div class="user-name">${this.escapeHtml(m.from)}</div>` : ''}
                 <div class="text">${this.escapeHtml(m.message)}</div>
-                <div class="timestamp">${new Date().toLocaleTimeString()}</div>
+                <div class="timestamp">${m.timestamp ? new Date(m.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString()}</div>
             </div>`;
-        return div;s
+        return div;
     }
 
     updateChatInterface() {

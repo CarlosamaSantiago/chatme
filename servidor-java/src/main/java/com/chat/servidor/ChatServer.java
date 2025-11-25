@@ -5,6 +5,9 @@ import java.net.*;
 import java.util.*;
 import java.util.concurrent.*;
 
+import com.chat.servidor.controllers.ICEController;
+import com.chat.servidor.services.ServicesImpl;
+
 public class ChatServer {
 
     private static final int PORT = 5000;
@@ -23,6 +26,22 @@ public class ChatServer {
     }
 
     public static void main(String[] args) {
+        // Cargar historial y grupos guardados primero
+        HistoryManager.loadHistory(historial, grupos);
+        
+        // Iniciar servidor ICE
+        ServicesImpl servicesImpl = new ServicesImpl();
+        ICEController iceController = new ICEController();
+        
+        // Iniciar ICE en un hilo separado
+        Thread iceThread = new Thread(() -> {
+            iceController.init(servicesImpl, args);
+        });
+        iceThread.setDaemon(false);
+        iceThread.start();
+        
+        // Mantener el servidor de sockets para compatibilidad (opcional)
+        // Si quieres solo ICE, comenta las siguientes líneas
         ChatServer servidor = new ChatServer(PORT);
         servidor.iniciar();
     }
