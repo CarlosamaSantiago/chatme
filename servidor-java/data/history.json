@@ -1,0 +1,17 @@
+{
+  "historial": {
+    "Juan_Santiago": [
+      {"from":"Juan","to":"Santiago","message":"Hola","timestamp":"Sat Nov 08 23:40:44 COT 2025","isGroup":false},
+      {"from":"Juan","to":"Santiago","message":"Hola","timestamp":"Sat Nov 08 23:53:59 COT 2025","isGroup":false},
+      {"from":"Santiago","to":"Juan","message":"Hola","timestamp":"Mon Nov 10 23:26:27 COT 2025","isGroup":false}
+    ],
+    "PruebaGrupoSerializacion": [
+      {"from":"Juan","to":"PruebaGrupoSerializacion","message":"Hola","timestamp":"Sat Nov 08 23:54:02 COT 2025","isGroup":true}
+    ]
+  },
+  "grupos": {
+    "PruebaGrupoSerializacion": [
+
+    ]
+  }
+}

@@ -3,6 +3,7 @@ package com.chat.servidor;
 import com.zeroc.Ice.*;
 import java.util.*;
 import java.util.concurrent.*;
+import java.lang.Exception;
 
 public class ChatServer {
 
@@ -25,7 +26,7 @@ public class ChatServer {
     }
 
     public ChatServer() {
-        this.semaphore = new Semaphore(5);
+        ChatServer.semaphore = new Semaphore(5);
         this.pool = Executors.newCachedThreadPool();
     }
 

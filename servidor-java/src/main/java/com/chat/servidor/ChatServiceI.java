@@ -69,29 +69,27 @@ public class ChatServiceI implements ChatService {
     }
 
     @Override
-    public StringList getUsers(Current current) {
-        StringList list = new StringList();
-        list.addAll(new ArrayList<>(ChatServer.getUsuarios().values()));
-        return list;
+    public String[] getUsers(Current current) {
+        List<String> users = new ArrayList<>(ChatServer.getUsuarios().values());
+        return users.toArray(new String[0]);
     }
 
     @Override
-    public StringList getGroups(Current current) {
-        StringList list = new StringList();
-        list.addAll(new ArrayList<>(ChatServer.getGrupos().keySet()));
-        return list;
+    public String[] getGroups(Current current) {
+        List<String> groups = new ArrayList<>(ChatServer.getGrupos().keySet());
+        return groups.toArray(new String[0]);
     }
 
     @Override
-    public MessageList getHistory(String target, String fromUser, boolean isGroup, Current current) {
+    public Message[] getHistory(String target, String fromUser, boolean isGroup, Current current) {
         String historyKey = getHistoryKey(fromUser, target, isGroup);
         List<String> historyJson = ChatServer.getHistorial().getOrDefault(historyKey, new ArrayList<>());
         
-        MessageList messageList = new MessageList();
-        for (String json : historyJson) {
-            messageList.add(parseJsonToMessage(json));
+        Message[] messageArray = new Message[historyJson.size()];
+        for (int i = 0; i < historyJson.size(); i++) {
+            messageArray[i] = parseJsonToMessage(historyJson.get(i));
         }
-        return messageList;
+        return messageArray;
     }
 
     // ===== MÉTODOS AUXILIARES =====
