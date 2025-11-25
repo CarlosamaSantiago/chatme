@@ -1,0 +1,55 @@
+services:
+  # Servidor Java (Backend Ice)
+  - type: web
+    name: chatme-java-server
+    env: docker
+    dockerfilePath: ./servidor-java/Dockerfile
+    dockerContext: ./servidor-java
+    rootDir: servidor-java
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: ICE_HOST
+        value: 0.0.0.0
+    healthCheckPath: /
+    plan: free
+
+  # Proxy HTTP (Node.js)
+  - type: web
+    name: chatme-proxy
+    env: node
+    rootDir: proxy-http
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        generateValue: true
+      - key: ICE_SERVER_HOST
+        fromService:
+          name: chatme-java-server
+          type: web
+          property: host
+      - key: ICE_SERVER_PORT
+        value: 10000
+    healthCheckPath: /
+    plan: free
+
+  # Cliente Web (Frontend estático)
+  - type: web
+    name: chatme-frontend
+    env: static
+    rootDir: cliente-web
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: REACT_APP_API_URL
+        fromService:
+          name: chatme-proxy
+          type: web
+          property: host
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    plan: free
+

@@ -2,14 +2,15 @@ import { MessageHandler } from './modules/messages.js';
 import { AudioHandler } from './modules/audio.js';
 import { WebRTCHandler } from './modules/webrtc.js';
 import { UIHandler } from './modules/ui.js';
+import config from './config.js';
 
 class ChatApp {
     constructor() {
         this.username = '';
         this.targetUser = '';
         this.isGroupChat = false;
-        this.API_URL = 'http://localhost:3000';
-        this.WS_URL = 'ws://localhost:3000';
+        this.API_URL = config.API_URL;
+        this.WS_URL = config.WS_URL;
         this.ws = null;
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 5;
