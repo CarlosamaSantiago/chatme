@@ -9,16 +9,31 @@
     "serve": "serve dist -l 8080",
     "start": "npm run build && npm run serve"
   },
-  "keywords": ["chat", "rpc", "ice", "websocket"],
+  "keywords": [
+    "chat",
+    "rpc",
+    "ice",
+    "websocket"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
-  "dependencies": {},
+  "dependencies": {
+    "ice": "^3.7.100"
+  },
   "devDependencies": {
+    "@babel/core": "^7.28.5",
+    "@babel/plugin-transform-modules-commonjs": "^7.27.1",
+    "@babel/preset-env": "^7.28.5",
+    "babel-loader": "^10.0.0",
+    "buffer": "^6.0.3",
+    "copy-webpack-plugin": "^11.0.0",
+    "process": "^0.11.10",
+    "serve": "^14.2.5",
+    "stream-browserify": "^3.0.0",
+    "util": "^0.12.5",
     "webpack": "^5.88.0",
     "webpack-cli": "^5.1.4",
-    "webpack-dev-server": "^4.15.0",
-    "copy-webpack-plugin": "^11.0.0",
-    "serve": "^14.2.5"
+    "webpack-dev-server": "^4.15.0"
   }
 }

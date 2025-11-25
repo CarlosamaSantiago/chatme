@@ -1,168 +1,349 @@
-# Chat Parte 2 - Cliente HTTP y comunicación mediante Proxy 
-## Integrantes
+# 💬 ChatMe - Aplicación de Chat con ZeroC Ice RPC
+
+## 👥 Integrantes
 - Santiago Carlosama
 - Joshua Sayur
 - Paula Andrea Piedrahita
 - Jean Carlo Ocampo
 
-## Características
+## Descripción General
 
-Mensajería privada: Envío de mensajes de texto entre usuarios
+**ChatMe** es una aplicación de mensajería en tiempo real que permite:
+- Enviar mensajes de texto entre usuarios
+- Crear y participar en grupos de chat
+- Enviar notas de voz grabadas desde el navegador
+- Realizar llamadas de voz entre usuarios (WebRTC)
+- Visualizar historial de conversaciones
 
-Grupos de chat: Creación y gestión de grupos de conversación
+La aplicación implementa una arquitectura de **tres capas** utilizando **ZeroC Ice** como middleware RPC para la comunicación entre el proxy y el servidor backend. **Todas las comunicaciones en tiempo real utilizan WebSockets de Ice** mediante callbacks bidireccionales, cumpliendo con el requisito de usar "ws (WebSockets) de ICE para reflejar un comportamiento en tiempo real de todos los servicios".
 
-Historial: Registro automático de todas las conversaciones
+### Componentes Principales
 
-## Orden, comandos e instrucciones para usar chatme
-### Nota: cada paso debe realizarse en un bash diferente desde la raiz del proyecto
+| Componente | Tecnología | Puerto | Función |
+|------------|------------|--------|---------|
+| Cliente Web | HTML/CSS/JS | 8080 | Interfaz de usuario |
+| Proxy HTTP | Node.js/Express | 3000 | Middleware, WebSocket, API REST, Ice RPC Client |
+| IceChatServer | Java/Ice | 10000 (Ice WS) | Backend, lógica de negocio, Ice RPC Server |
 
-### 1 Cómo ejecutar el servidor backend de java 
+---
+
+## 🔄 Flujo de Comunicación
+
+### 1. Flujo de Registro de Usuario
+
+```
+┌──────────┐     POST /register      ┌──────────┐     TCP Socket      ┌──────────────┐
+│ Cliente  │ ──────────────────────► │  Proxy   │ ─────────────────► │ IceChatServer │
+│   Web    │     {username:"Ana"}    │   HTTP   │  {action:"REGISTER" │    (Java)     │
+└──────────┘                         └──────────┘   username:"Ana"}   └──────────────┘
+     │                                    │                                  │
+     │◄───── JSON Response ───────────────│◄────── JSON Response ───────────│
+     │      {action:"REGISTERED"}         │       {action:"REGISTERED"}      │
+     │                                    │                                  │
+     │         WebSocket                  │                                  │
+     │◄────────────────────────────────────                                  │
+     │  Conexión WS para tiempo real                                         │
+```
+
+### 2. Flujo de Envío de Mensaje
+
+```
+Usuario A envía mensaje a Usuario B:
+
+1. Cliente A (MessageHandler.sendMessage()):
+   - Muestra mensaje optimista inmediatamente (UI)
+   - POST /sendMessage {from:"A", to:"B", message:"Hola"}
+        │
+        ▼
+2. Proxy (index.js):
+   - Recibe petición HTTP
+   - iceBridge.callIceMethod('sendMessage', params)
+        │
+        ▼ Ice RPC (WebSocket) puerto 10000
+        │
+3. IceChatServer (ChatServiceI.sendMessage()): 
+   - Guarda mensaje en historial
+   - Persiste en history.json
+   - Llama a callbacks Ice registrados (WebSocket bidireccional)
+        │
+        ▼ Ice Callback (WebSocket bidireccional)
+        │
+4. Proxy (MessageCallbackI.onMessage()):
+   - Recibe notificación via Ice WebSocket
+   - messageHandler procesa el mensaje
+        │
+        ▼
+5. Proxy: Envía via WebSocket a usuarios conectados
+        │
+        ├──────► WebSocket a Usuario B: {type:"newMessage", message:{...}}
+        │
+        └──────► WebSocket a Usuario A: {type:"newMessage", message:{...}}
+        │
+        ▼
+6. Cliente A (MessageHandler.handleNewMessage()):
+   - Verifica si mensaje es relevante para chat actual
+   - Si está en chat con B: muestra mensaje (actualiza con timestamp del servidor)
+   - Si no está en chat con B: solo notificación
+        │
+        ▼
+7. Cliente B (MessageHandler.handleNewMessage()):
+   - Verifica si mensaje es relevante para chat actual
+   - Si está en chat con A: muestra mensaje inmediatamente
+   - Si no está en chat con A: muestra notificación
+```
+
+### 3. Flujo de Nota de Voz
+
+```
+1. Usuario presiona "🎤 Voz"
+        │
+        ▼
+2. MediaRecorder graba audio del micrófono
+        │
+        ▼
+3. Usuario presiona "⏹ Detener"
+        │
+        ▼
+4. Audio convertido a Base64
+        │
+        ▼
+5. POST /sendVoiceNote {from, to, audioData (Base64), isGroup}
+        │
+        ▼
+6. Proxy → iceBridge → IceChatServer
+        │
+        ▼
+7. Servidor guarda en historial con type:"audio"
+        │
+        ▼
+8. WebSocket notifica a destinatarios
+        │
+        ▼
+9. Clientes muestran reproductor de audio
+```
+
+### 4. Flujo de Llamada de Voz (WebRTC)
+
+```
+┌─────────────┐                    ┌─────────────┐                    ┌─────────────┐
+│  Usuario A  │                    │    Proxy    │                    │  Usuario B  │
+└──────┬──────┘                    └──────┬──────┘                    └──────┬──────┘
+       │                                  │                                  │
+       │  1. Click "Llamar"               │                                  │
+       │  getUserMedia (micrófono)        │                                  │
+       │  createOffer (SDP)               │                                  │
+       │                                  │                                  │
+       │──── WS: call-offer + SDP ───────►│                                  │
+       │                                  │──── WS: call-offer + SDP ───────►│
+       │                                  │                                  │
+       │                                  │                    2. ¿Aceptar?  │
+       │                                  │                    getUserMedia  │
+       │                                  │                    createAnswer  │
+       │                                  │                                  │
+       │                                  │◄─── WS: call-answer + SDP ───────│
+       │◄─── WS: call-answer + SDP ───────│                                  │
+       │                                  │                                  │
+       │  3. setRemoteDescription         │                                  │
+       │                                  │                                  │
+       │──── WS: ice-candidate ──────────►│──── WS: ice-candidate ──────────►│
+       │◄─── WS: ice-candidate ───────────│◄─── WS: ice-candidate ───────────│
+       │                                  │                                  │
+       │                                  │                                  │
+       │◄═══════════════ CONEXIÓN P2P DIRECTA ══════════════════════════════►│
+       │              Audio fluye sin pasar por el servidor                  │
+       │                                  │                                  │
+```
+
+
+## 📦 Descripción de Módulos
+
+### 🌐 Módulo: Cliente Web (`cliente-web/`)
+
+**Propósito:** Proporcionar la interfaz gráfica de usuario en el navegador.
+
+**Responsabilidades:**
+- Mostrar la interfaz de chat
+- Capturar entrada del usuario (mensajes, audio)
+- Comunicarse con el proxy via HTTP y WebSocket
+- Manejar llamadas de voz con WebRTC
+- Actualizar la UI en tiempo real
+
+**Tecnologías:**
+- HTML5, CSS3, JavaScript (ES6+ con módulos)
+- Webpack 5 para empaquetado
+- Babel para transpilación
+- WebRTC para llamadas P2P
+- MediaRecorder API para grabación de audio
+- Arquitectura modular (separación de responsabilidades)
+
+---
+
+### 🔌 Módulo: Proxy HTTP (`proxy-http/`)
+
+**Propósito:** Actuar como intermediario entre el cliente web y el servidor Java.
+
+**Responsabilidades:**
+- Exponer API REST para el cliente
+- Manejar conexiones WebSocket para tiempo real
+- Traducir peticiones HTTP a formato Ice/TCP
+- Gestionar señalización WebRTC
+- Broadcast de mensajes en tiempo real
+
+**Tecnologías:**
+- Node.js
+- Express.js (servidor HTTP)
+- ws (WebSocket)
+- ice (ZeroC Ice para Node.js)
+
+---
+
+### ☕ Módulo: Servidor Java (`servidor-java/`)
+
+**Propósito:** Backend que implementa toda la lógica de negocio.
+
+**Responsabilidades:**
+- Gestionar usuarios registrados
+- Crear y administrar grupos
+- Almacenar y recuperar historial de mensajes
+- Implementar Ice RPC para clientes nativos
+- Persistir datos en archivo JSON
+
+**Tecnologías:**
+- Java 11+
+- ZeroC Ice
+- Gradle (build system)
+- Concurrencia con ExecutorService
+
+---
+
+
+## 🚀 Instrucciones de Ejecución
+
+### Requisitos Previos
+- Java JDK 11 o superior
+- Node.js 16 o superior
+- npm (incluido con Node.js)
+
+### Paso 1: Iniciar el Servidor Java
+
 ```bash
 cd servidor-java
 ./gradlew build
-java -jar .\build\libs\servidor-java-1.0-SNAPSHOT.jar
+./gradlew run
 ```
-### 2 Cómo ejecutar el proxy  
+
+**Output esperado:**
+```
+Servidor original iniciado en puerto 5000 (para proxy HTTP)
+===========================================
+Servidor Ice de Chat iniciado
+TCP endpoint: tcp -p 5000 (para proxy HTTP)
+WebSocket endpoint: ws://localhost:10000 (para frontend)
+===========================================
+```
+
+### Paso 2: Iniciar el Proxy HTTP
+
 ```bash
 cd proxy-http
 npm install
-node index.js
+npm start
 ```
 
-### 3 Cómo ejecutar el frontend   
+**Output esperado:**
+```
+===========================================
+Proxy HTTP en puerto 3000
+WebSocket server activo en ws://localhost:3000
+===========================================
+🔌 Ice Bridge configurado para TCP en puerto 5000
+✅ Proxy listo - usando ZeroC Ice RPC
+===========================================
+```
+
+### Paso 3: Iniciar el Cliente Web
+
 ```bash
 cd cliente-web
 npm install
-npx serve .
+npm run build
+npm run serve
 ```
 
-### 4 Abrir un navegador 
-Al ejecutar el paso 3, la consola nos indicará en qué dirección esta corriendo el servidor web estático.
-
-### 5 Usar Chatme
-Al ingresar verá los usuarios disponibles y los grupos que estén creados.
-- Si desea chatear con algún usuario, haga click sobre el nombre o icono que está en la izquierda y se le desplegara un chat;
-    Escriba su mensaje y envieselo.
-- Si desea chatear en algún grupo, haga click sobre el nombre o icono del grupo que está en la izquierda y se le desplegara un chat;
-    Escriba su mensaje y envielo.
-- Si desea crear un grupo, escriba el nombre del grupo en el apartado Nombre del Grupo y haga click en Crear, después podrá ver el grupo
-en *Grupos*
-
-### Notas
-
-Puede abrir tantas ventanas como desee en la misma maquina donde esté ejecutando el backend y el proxy, cada una será "independiente" y
-representará un "usuario" "diferente". Sin embargo, si quiere acceder desde otra maquina debe tener en cuenta las siguientes consideraciones:
-- 1. Conocer la dirección IP de la maquina donde ejecutará el proxy y el frontend.
-- 2. Antes de ejecutar el proxy, cambiar, en el archivo proxy-http/services/chatDelegate.js, la siguiente linea:
-```ts
-const SERVER_HOST = 'localhost';
+**Output esperado:**
 ```
-por
-```ts
-const SERVER_HOST = '(ip de la maquina donde ejecutará el proxy)';
+   ┌──────────────────────────────────────────┐
+   │   Serving!                               │
+   │   - Local:    http://localhost:8080      │
+   └──────────────────────────────────────────┘
 ```
-- 3. Antes de ejecutar el front, cambiar, en el archivo cliente-web/chat.js, la siguiente linea:
 
-```ts
+### Paso 4: Usar la Aplicación
+
+1. Abrir `http://localhost:8080` en el navegador
+2. Ingresar nombre de usuario cuando se solicite
+3. ¡Listo para chatear!
+
+---
+
+## ⚡ Funcionalidades
+
+### ✅ Mensajería de Texto
+- Enviar mensajes a usuarios individuales
+- Enviar mensajes a grupos
+- Historial persistente de conversaciones
+- Actualización en tiempo real via WebSocket
+- Mensajes aparecen inmediatamente cuando estás dentro del chat
+
+### ✅ Grupos de Chat
+- Crear grupos con nombre personalizado
+- Enviar mensajes a todos los miembros
+- Lista de grupos actualizada en tiempo real
+
+### ✅ Notas de Voz
+- Grabar audio desde el micrófono
+- Enviar audio codificado en Base64
+- Reproductor de audio integrado en el chat
+- Soporte para múltiples formatos (webm, ogg, mp4)
+
+### ✅ Llamadas de Voz
+- Llamadas P2P usando WebRTC
+- Señalización via WebSocket del proxy
+- Indicador visual de llamada en curso
+- Timer de duración de llamada
+- Audio bidireccional en tiempo real
+
+---
+
+## ⚙️ Configuración Avanzada
+
+### Cambiar Hosts/Puertos
+
+**Servidor Java** (`IceChatServer.java`):
+```java
+// Puerto Ice WebSocket
+"ws -h localhost -p 10000"
+
+// Puerto TCP
+new ChatServer(5000)
+```
+
+**Proxy HTTP** (`services/iceBridge.js`):
+```javascript
+this.SERVER_HOST = 'localhost';
+this.SERVER_PORT = 5000;
+```
+
+**Cliente Web** (`src/chat.js`):
+```javascript
 this.API_URL = 'http://localhost:3000';
+this.WS_URL = 'ws://localhost:3000';
 ```
-por
-```ts
-this.API_URL = 'http://(ip de la maquina donde ejecutará el server front estatico):3000';
-```
-- 4. Ya puede ejecutar los pasos del 1 al 3 con normalidad
 
-De esta manera, podrá, desde otra maquina, acceder a la dirección que le indique la consola cuando realice el paso 3.
+### Acceso desde otra máquina
 
-**Flujo de Comunicación entre Cliente, Proxy y Backend**
+1. Cambiar `localhost` por la IP del servidor en todos los archivos mencionados
+2. Asegurarse de que los puertos estén abiertos en el firewall
+3. Usar HTTPS/WSS en producción
 
-El sistema de chat sigue una arquitectura de tres capas donde cada componente tiene responsabilidades específicas que se integran para proporcionar una experiencia de chat en tiempo real.
-
-**Flujo Principal de Comunicación**
-
-**Cliente Web (Frontend) ↔ Proxy HTTP (Middleware) ↔ Backend Java (Servidor Socket)**
-
-El Cliente Web (interfaz de usuario en navegador) se comunica exclusivamente mediante peticiones HTTP REST con el Proxy HTTP (Node.js/Express), que actúa como intermediario convirtiendo estas peticiones en conexiones de socket TCP con el Backend Java, donde reside toda la lógica del negocio y gestión de estado.
-
-**Secuencia Operativa Integrada**
-
-**1. Ciclo de Registro y Conexión**
-
-- El usuario ingresa su nombre en el cliente web
-- El frontend envía POST /register al proxy con el username
-- El proxy establece conexión socket con el backend Java enviando {"action":"REGISTER","username":"X"}
-- El backend registra al usuario en sus mapas internos y responde confirmación
-- Simultáneamente, el backend notifica a todos los clientes conectados para actualizar las listas de usuarios
-
-**2. Gestión de Conversaciones**
-
-- **Para chats privados**: Cuando un usuario selecciona otro usuario, el frontend inicia polling cada 2 segundos a /getHistory
-- **Para grupos**: Similar proceso pero marcando isGroup:true
-- El backend calcula la clave de historial (combinación ordenada de usuarios para privados, nombre del grupo para grupales)
-- Los mensajes se almacenan en memoria y se recuperan bajo demanda
-
-**3. Envío de Mensajes en Tiempo Real**
-
-- **Mensajes privados**:
-  - Cliente A → Proxy → Backend → Cliente B (destinatario) + Cliente A (confirmación)
-- **Mensajes grupales**:
-  - Cliente → Proxy → Backend → Todos los clientes conectados
-- El backend mantiene historial simétrico para conversaciones privadas y broadcast para grupales
-
-**4. Sincronización de Estado**
-
-- Polling automático cada 5 segundos para actualizar listas de usuarios y grupos
-- Notificaciones push cuando ocurren eventos (nuevos grupos, usuarios que se conectan/desconectan)
-- El backend ejecuta broadcasts automáticos ante cambios de estado
-
-**Protocolos y Adaptación**
-
-**Del Frontend al Proxy**: Comunicación HTTP REST estándar
-
-javascript
-
-*// Ejemplo: Frontend → Proxy*
-
-POST /sendMessage
-
-{
-
-`  `"from": "usuarioA",
-
-`  `"to": "usuarioB", 
-
-`  `"message": "Hola",
-
-`  `"isGroup": false
-
-}
-
-**Del Proxy al Backend**: Mensajes JSON sobre sockets TCP
-
-json
-
-*// Ejemplo: Proxy → Backend*
-
-{"action":"SEND\_MESSAGE","from":"usuarioA","to":"usuarioB","message":"Hola","isGroup":false}
-
-**Respuestas del Backend**: JSON con estructura consistente
-
-json
-
-*// Éxito*
-
-{"action":"MESSAGE\_SENT","timestamp":"..."}
-
-*// Error*  
-
-{"error":"Descripción del error"}
-
-**Características Clave del Flujo**
-
-- **Separación de responsabilidades**: Cada capa tiene una función específica
-- **Adaptación de protocolos**: El proxy convierte HTTP a sockets TCP
-- **Estado en memoria**: El backend Java mantiene todo el estado de la aplicación
-- **Comunicación bidireccional**: Aunque el frontend usa HTTP, simula tiempo real mediante polling
-- **Gestión de concurrencia**: Backend Java usa ExecutorService y Semaphore para manejar múltiples clientes
-
-Este diseño permite que el frontend web se comunique eficientemente con un backend de sockets a través de un proxy que realiza la necesaria traducción de protocolos, manteniendo la escalabilidad y responsividad del sistema de chat.
+---

@@ -1,34 +1,277 @@
-# Java
+# ============================================
+# ChatMe - .gitignore
+# ============================================
+
+# ============================================
+# Java / Gradle
+# ============================================
 *.class
 *.jar
 *.war
 *.ear
+*.nar
+
+# Build outputs
 build/
-.gradle/
 out/
 bin/
 target/
-data
-# Node
-node_modules/
-npm-debug.log
-package-lock.json
+.gradle/
+gradle-app.setting
+!gradle-wrapper.jar
+!gradle-wrapper.properties
 
-# IDEs
+# Gradle cache
+.gradle/
+gradle-app.setting
+
+# IntelliJ IDEA
 .idea/
-.vscode/
 *.iml
 *.ipr
 *.iws
+.idea_modules/
 
-# OS
+# Eclipse
+.classpath
+.project
+.settings/
+.metadata/
+bin/
+tmp/
+*.tmp
+*.bak
+*.swp
+*~.nib
+local.properties
+.loadpath
+.recommenders
+
+# NetBeans
+nbproject/private/
+build/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+
+# ============================================
+# Node.js / npm
+# ============================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Package lock files (opcional - descomentar si quieres ignorarlos)
+# package-lock.json
+# yarn.lock
+
+# ============================================
+# Cliente Web (Webpack)
+# ============================================
+cliente-web/dist/
+cliente-web/.cache/
+cliente-web/.temp/
+cliente-web/*.log
+cliente-web/.webpack/
+
+# Webpack
+*.bundle.js
+*.bundle.js.map
+*.chunk.js
+*.chunk.js.map
+
+# Source maps (opcional - descomentar si quieres ignorarlos)
+# *.js.map
+# *.css.map
+
+# ============================================
+# Proxy HTTP
+# ============================================
+proxy-http/*.log
+proxy-http/.env
+proxy-http/.env.local
+proxy-http/.env.*.local
+
+# Archivos generados por Ice (Node.js)
+proxy-http/generated/
+proxy-http/node_modules/
+
+# ============================================
+# Servidor Java - Archivos Generados
+# ============================================
+servidor-java/src/main/generated/
+servidor-java/build/
+servidor-java/.gradle/
+servidor-java/gradle-app.setting
+servidor-java/.idea/
+servidor-java/*.iml
+servidor-java/.classpath
+servidor-java/.project
+servidor-java/.settings/
+
+# Archivos de datos (historial, etc.)
+servidor-java/data/history.json
+servidor-java/data/*.json
+!servidor-java/data/.gitkeep
+
+# ============================================
+# ZeroC Ice
+# ============================================
+*.ice.bak
+*.ice~
+slice2java_output/
+slice2js_output/
+
+# ============================================
+# IDEs y Editores
+# ============================================
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# ============================================
+# Sistemas Operativos
+# ============================================
+# macOS
 .DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Windows
 Thumbs.db
-desktop.ini
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
 
-# Logs
+# Linux
+*~
+.directory
+.Trash-*
+.nfs*
+
+# ============================================
+# Logs y Archivos Temporales
+# ============================================
 *.log
-
-# Temporal
+*.log.*
+logs/
 *.tmp
 *.temp
+*.cache
+*.pid
+*.seed
+*.pid.lock
+
+# ============================================
+# Archivos de Configuración Local
+# ============================================
+.env
+.env.local
+.env.*.local
+config.local.json
+settings.local.json
+
+# ============================================
+# Archivos de Testing
+# ============================================
+coverage/
+.nyc_output/
+*.lcov
+.jest/
+test-results/
+playwright-report/
+
+# ============================================
+# Archivos de Backup
+# ============================================
+*.bak
+*.backup
+*.old
+*.orig
+*.save
+
+# ============================================
+# Archivos Específicos del Proyecto
+# ============================================
+# Historial de chat (contiene datos de usuarios)
+servidor-java/data/history.json
+
+# Archivos de terminal/consola
+*.txt
+!README.md
+!LICENSE
+!CHANGELOG.md
+
+# Archivos de documentación temporal
+*.md.bak
+*.md.tmp
+
+# Archivos de configuración local
+*.local
+config.local.*
+settings.local.*
+
+# ============================================
+# Mantener Archivos Importantes
+# ============================================
+# NO ignorar estos archivos aunque coincidan con patrones arriba
+!gradle-wrapper.jar
+!gradle-wrapper.properties
+!package.json
+!package-lock.json
+!build.gradle
+!settings.gradle
+!webpack.config.js
+!.babelrc
+!index.html
+!chat.css
+!compile-ice.bat
+!gradlew
+!gradlew.bat
+
+# Mantener estructura de directorios
+!cliente-web/src/**/*
+!proxy-http/services/**/*
+!servidor-java/src/**/*
+!servidor-java/data/.gitkeep

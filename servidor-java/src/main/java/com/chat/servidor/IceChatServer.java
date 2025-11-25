@@ -4,8 +4,7 @@ import com.zeroc.Ice.*;
 import com.zeroc.Ice.Object;
 import java.lang.Exception;
 
-// IMPORTANTE: Descomentar estos imports después de compilar Chat.ice con slice2java
-// Los archivos generados estarán en el paquete Chat
+// Imports de las clases generadas por slice2java desde Chat.ice
 import Chat.*;
 
 import java.util.*;
@@ -29,21 +28,11 @@ public class IceChatServer {
             // Inicializar Ice
             communicator = Util.initialize(args);
             
-            // Crear adaptador de objetos solo con WebSocket
-            // El servidor original manejará TCP en puerto 5000
+            // Crear adaptador de objetos Ice con endpoint WebSocket (puerto 10000)
             ObjectAdapter adapter = communicator.createObjectAdapterWithEndpoints(
                 "ChatAdapter", 
                 "ws -h localhost -p 10000"
             );
-            
-            // Iniciar el servidor original en un thread separado para compatibilidad con el proxy
-            Thread serverThread = new Thread(() -> {
-                ChatServer originalServer = new ChatServer(5000);
-                originalServer.iniciar();
-            });
-            serverThread.setDaemon(true);
-            serverThread.start();
-            System.out.println("Servidor original iniciado en puerto 5000 (para proxy HTTP)");
             
             // Crear y activar el servidor
             ChatServiceI chatService = new ChatServiceI();
@@ -52,8 +41,7 @@ public class IceChatServer {
             
             System.out.println("===========================================");
             System.out.println("Servidor Ice de Chat iniciado");
-            System.out.println("TCP endpoint: tcp -p 5000 (para proxy HTTP)");
-            System.out.println("WebSocket endpoint: ws://localhost:10000 (para frontend)");
+            System.out.println("WebSocket endpoint: ws://localhost:10000");
             System.out.println("===========================================");
             
             // Esperar hasta que se cierre
@@ -264,8 +252,18 @@ public class IceChatServer {
                 for (Map.Entry<String, MessageCallbackPrx> entry : callbacks.entrySet()) {
                     try {
                         entry.getValue().onGroupMessage(msg, target);
+                        System.out.println("✅ Notificación enviada a " + entry.getKey() + " (grupo)");
+                    } catch (com.zeroc.Ice.ConnectionLostException e) {
+                        System.err.println("⚠️  Conexión perdida con " + entry.getKey() + " (grupo), removiendo callback");
+                        callbacks.remove(entry.getKey());
+                        usernameToProxy.remove(entry.getKey());
                     } catch (java.lang.Exception e) {
-                        System.err.println("Error notificando a " + entry.getKey() + ": " + e.getMessage());
+                        System.err.println("❌ Error notificando a " + entry.getKey() + " (grupo): " + 
+                            (e.getMessage() != null ? e.getMessage() : e.getClass().getName()));
+                        if (e.getCause() != null) {
+                            System.err.println("   Causa: " + e.getCause().getMessage());
+                        }
+                        e.printStackTrace();
                     }
                 }
             } else {
@@ -274,18 +272,42 @@ public class IceChatServer {
                 if (targetCallback != null) {
                     try {
                         targetCallback.onMessage(msg);
+                        System.out.println("✅ Notificación enviada a destinatario: " + target);
+                    } catch (com.zeroc.Ice.ConnectionLostException e) {
+                        System.err.println("⚠️  Conexión perdida con destinatario " + target + ", removiendo callback");
+                        callbacks.remove(target);
+                        usernameToProxy.remove(target);
                     } catch (java.lang.Exception e) {
-                        System.err.println("Error notificando a " + target + ": " + e.getMessage());
+                        System.err.println("❌ Error notificando a destinatario " + target + ": " + 
+                            (e.getMessage() != null ? e.getMessage() : e.getClass().getName()));
+                        if (e.getCause() != null) {
+                            System.err.println("   Causa: " + e.getCause().getMessage());
+                        }
+                        e.printStackTrace();
                     }
+                } else {
+                    System.out.println("⚠️  No hay callback registrado para destinatario: " + target);
                 }
                 // También notificar al remitente
                 MessageCallbackPrx senderCallback = callbacks.get(msg.from);
                 if (senderCallback != null) {
                     try {
                         senderCallback.onMessage(msg);
+                        System.out.println("✅ Notificación enviada a remitente: " + msg.from);
+                    } catch (com.zeroc.Ice.ConnectionLostException e) {
+                        System.err.println("⚠️  Conexión perdida con remitente " + msg.from + ", removiendo callback");
+                        callbacks.remove(msg.from);
+                        usernameToProxy.remove(msg.from);
                     } catch (java.lang.Exception e) {
-                        System.err.println("Error notificando a " + msg.from + ": " + e.getMessage());
+                        System.err.println("❌ Error notificando a remitente " + msg.from + ": " + 
+                            (e.getMessage() != null ? e.getMessage() : e.getClass().getName()));
+                        if (e.getCause() != null) {
+                            System.err.println("   Causa: " + e.getCause().getMessage());
+                        }
+                        e.printStackTrace();
                     }
+                } else {
+                    System.out.println("⚠️  No hay callback registrado para remitente: " + msg.from);
                 }
             }
         }
