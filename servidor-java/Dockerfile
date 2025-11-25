@@ -3,9 +3,13 @@ FROM gradle:7.6-jdk17 AS build
 
 WORKDIR /app
 
-# Copiar archivos de configuración
+# Copiar archivos de configuración y wrapper de Gradle
 COPY build.gradle settings.gradle gradle.properties ./
 COPY gradle ./gradle
+COPY gradlew gradlew.bat ./
+
+# Hacer gradlew ejecutable
+RUN chmod +x ./gradlew
 
 # Copiar código fuente
 COPY src ./src
