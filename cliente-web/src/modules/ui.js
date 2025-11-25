@@ -17,13 +17,13 @@ export class UIHandler {
             console.warn('⚠️  No se encontró el contenedor de mensajes');
             return;
         }
-        
+
         // Evitar duplicados - verificar los últimos 20 mensajes
         const existingMsgs = container.querySelectorAll('.message');
         const msgContent = String(msg.message || msg.content || '').trim();
         const msgTimestamp = msg.timestamp ? (typeof msg.timestamp === 'string' ? parseInt(msg.timestamp) : msg.timestamp) : Date.now();
         const msgFrom = String(msg.from || '').trim();
-        
+
         // Solo verificar duplicados si el mensaje viene del mismo usuario
         // Esto evita que se filtren mensajes válidos de diferentes usuarios
         if (msgFrom) {
@@ -32,11 +32,11 @@ export class UIHandler {
                 const existingFrom = String(existing.dataset.from || '').trim();
                 const existingMsg = String(existing.dataset.message || '').trim();
                 const existingTime = existing.dataset.timestamp ? parseInt(existing.dataset.timestamp) : 0;
-                
+
                 // Verificar si es el mismo mensaje (mismo remitente, contenido idéntico y timestamp muy similar)
                 // Usar una ventana de tiempo más estricta (2 segundos) para evitar falsos positivos
                 // IMPORTANTE: Solo considerar duplicado si viene del MISMO usuario Y el contenido es idéntico
-                if (existingFrom === msgFrom && 
+                if (existingFrom === msgFrom &&
                     existingMsg === msgContent &&
                     msgContent.length > 0 && // Solo verificar si hay contenido
                     Math.abs(existingTime - msgTimestamp) < 2000) {
@@ -47,7 +47,7 @@ export class UIHandler {
                 }
             }
         }
-        
+
         console.log('✅ Agregando nuevo mensaje al chat:', msgFrom, '->', msg.to);
         const messageEl = this.createMessageElement(msg);
         container.appendChild(messageEl);
@@ -57,7 +57,7 @@ export class UIHandler {
     displayHistory(messages) {
         const container = document.getElementById('messagesContainer');
         if (!container) return;
-        
+
         container.innerHTML = '';
         if (Array.isArray(messages) && messages.length > 0) {
             messages.forEach(m => {
@@ -83,7 +83,7 @@ export class UIHandler {
         // Guardar timestamp para detección de duplicados
         const msgTimestamp = m.timestamp ? (typeof m.timestamp === 'string' ? parseInt(m.timestamp) : m.timestamp) : Date.now();
         div.dataset.timestamp = msgTimestamp.toString();
-        
+
         let content = '';
         if (m.type === 'audio' && m.audioData) {
             // Determinar si audioData ya incluye el prefijo o es solo Base64
@@ -105,7 +105,7 @@ export class UIHandler {
         } else {
             content = `<div class="text">${this.escapeHtml(m.message || m.content)}</div>`;
         }
-        
+
         // Convertir timestamp a fecha legible
         let timestamp;
         if (m.timestamp) {
@@ -117,7 +117,7 @@ export class UIHandler {
         } else {
             timestamp = new Date().toLocaleTimeString();
         }
-        
+
         div.innerHTML = `
             <div class="avatar" style="background-color:${this.getAvatarColor(m.from)}">
                 ${m.from[0].toUpperCase()}
@@ -140,7 +140,7 @@ export class UIHandler {
         } else {
             inputWrapper.style.display = 'none';
         }
-        
+
         // Actualizar listas para marcar el seleccionado
         this.app.loadUsers();
         this.app.loadGroups();
@@ -181,7 +181,7 @@ export class UIHandler {
     addGroupToList(groupName) {
         const groupsList = document.getElementById('groupsList');
         if (!groupsList) return;
-        
+
         // Verificar si ya existe
         const existing = Array.from(groupsList.children).find(
             el => {
@@ -190,13 +190,13 @@ export class UIHandler {
             }
         );
         if (existing) return;
-        
+
         // Remover mensaje "No hay grupos" si existe
         const noGroupsMsg = groupsList.querySelector('p');
         if (noGroupsMsg) {
             noGroupsMsg.remove();
         }
-        
+
         const el = this.createGroupElement(groupName);
         groupsList.appendChild(el);
     }
@@ -204,18 +204,18 @@ export class UIHandler {
     removeGroupFromList(groupName) {
         const groupsList = document.getElementById('groupsList');
         if (!groupsList) return;
-        
+
         const groupEl = Array.from(groupsList.children).find(
             el => {
                 const span = el.querySelector('span');
                 return span && span.textContent.trim() === groupName;
             }
         );
-        
+
         if (groupEl) {
             groupEl.remove();
         }
-        
+
         // Si no quedan grupos, mostrar mensaje
         if (groupsList.children.length === 0) {
             groupsList.innerHTML = '<p style="color:#95a5a6;font-size:12px;padding:10px;">No hay grupos</p>';
@@ -252,4 +252,3 @@ export class UIHandler {
         return div.innerHTML;
     }
 }
-

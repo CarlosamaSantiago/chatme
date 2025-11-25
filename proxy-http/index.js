@@ -27,20 +27,20 @@ const activeCalls = new Map();
 // Manejar conexiones WebSocket
 wss.on('connection', (ws, req) => {
     console.log('Nueva conexión WebSocket');
-    
+
     let username = null;
-    
+
     ws.on('message', (message) => {
         try {
             const data = JSON.parse(message);
-            
+
             switch (data.type) {
                 case 'register':
                     username = data.username;
                     wsConnections.set(username, ws);
                     console.log(`Usuario WebSocket registrado: ${username}`);
                     console.log(`   Total de usuarios conectados: ${wsConnections.size}`);
-                    
+
                     // Notificar a TODOS los demás usuarios que hay un nuevo usuario conectado
                     wsConnections.forEach((otherWs, otherUser) => {
                         if (otherUser !== username && otherWs.readyState === WebSocket.OPEN) {
@@ -55,7 +55,7 @@ wss.on('connection', (ws, req) => {
                             }
                         }
                     });
-                    
+
                     // Suscribir usuario a notificaciones Ice
                     // Esperar un momento para asegurar que Ice esté completamente conectado
                     setTimeout(() => {
@@ -81,40 +81,40 @@ wss.on('connection', (ws, req) => {
                             console.log(`⚠️  Ice no está conectado, usuario ${username} no se puede suscribir aún`);
                         }
                     }, 500);
-                    
-                    ws.send(JSON.stringify({ 
-                        type: 'registered', 
-                        username: username 
+
+                    ws.send(JSON.stringify({
+                        type: 'registered',
+                        username: username
                     }));
                     break;
-                
+
                 // === SEÑALIZACIÓN WEBRTC ===
-                
+
                 case 'call-offer':
                     // Usuario A envía oferta SDP a Usuario B
                     handleCallOffer(data, username);
                     break;
-                
+
                 case 'call-answer':
                     // Usuario B responde con SDP answer
                     handleCallAnswer(data, username);
                     break;
-                
+
                 case 'ice-candidate':
                     // Intercambio de candidatos ICE
                     handleIceCandidate(data, username);
                     break;
-                
+
                 case 'call-reject':
                     // Usuario rechaza la llamada
                     handleCallReject(data, username);
                     break;
-                
+
                 case 'call-end':
                     // Usuario termina la llamada
                     handleCallEnd(data, username);
                     break;
-                
+
                 default:
                     console.log('Tipo de mensaje WebSocket no reconocido:', data.type);
             }
@@ -122,7 +122,7 @@ wss.on('connection', (ws, req) => {
             console.error('Error procesando mensaje WebSocket:', e);
         }
     });
-    
+
     ws.on('close', () => {
         if (username) {
             // Desuscribir de Ice
@@ -134,7 +134,7 @@ wss.on('connection', (ws, req) => {
                     console.error(`❌ Error desuscribiendo ${username} de Ice:`, err);
                 });
             }
-            
+
             // Terminar llamadas activas del usuario
             activeCalls.forEach((call, callId) => {
                 if (call.caller === username || call.callee === username) {
@@ -150,11 +150,11 @@ wss.on('connection', (ws, req) => {
                     activeCalls.delete(callId);
                 }
             });
-            
+
             wsConnections.delete(username);
             console.log(`Usuario WebSocket desconectado: ${username}`);
             console.log(`   Total de usuarios conectados: ${wsConnections.size}`);
-            
+
             // Notificar a los demás usuarios que este usuario se desconectó
             wsConnections.forEach((otherWs, otherUser) => {
                 if (otherWs.readyState === WebSocket.OPEN) {
@@ -170,7 +170,7 @@ wss.on('connection', (ws, req) => {
             });
         }
     });
-    
+
     ws.on('error', (error) => {
         console.error('Error WebSocket:', error);
     });
@@ -181,13 +181,13 @@ wss.on('connection', (ws, req) => {
 function handleCallOffer(data, from) {
     const { to, offer, isGroup } = data;
     console.log(`📞 Oferta de llamada: ${from} -> ${to}`);
-    
+
     const targetWs = wsConnections.get(to);
     if (targetWs && targetWs.readyState === WebSocket.OPEN) {
         // Crear ID de llamada
         const callId = `${from}_${to}_${Date.now()}`;
         activeCalls.set(callId, { caller: from, callee: to, status: 'ringing' });
-        
+
         targetWs.send(JSON.stringify({
             type: 'call-offer',
             from: from,
@@ -212,12 +212,12 @@ function handleCallOffer(data, from) {
 function handleCallAnswer(data, from) {
     const { to, answer, callId } = data;
     console.log(`✅ Respuesta de llamada: ${from} -> ${to}`);
-    
+
     const call = activeCalls.get(callId);
     if (call) {
         call.status = 'connected';
     }
-    
+
     const targetWs = wsConnections.get(to);
     if (targetWs && targetWs.readyState === WebSocket.OPEN) {
         targetWs.send(JSON.stringify({
@@ -231,7 +231,7 @@ function handleCallAnswer(data, from) {
 
 function handleIceCandidate(data, from) {
     const { to, candidate } = data;
-    
+
     const targetWs = wsConnections.get(to);
     if (targetWs && targetWs.readyState === WebSocket.OPEN) {
         targetWs.send(JSON.stringify({
@@ -245,9 +245,9 @@ function handleIceCandidate(data, from) {
 function handleCallReject(data, from) {
     const { to, callId } = data;
     console.log(`❌ Llamada rechazada: ${from} rechazó llamada de ${to}`);
-    
+
     activeCalls.delete(callId);
-    
+
     const targetWs = wsConnections.get(to);
     if (targetWs && targetWs.readyState === WebSocket.OPEN) {
         targetWs.send(JSON.stringify({
@@ -260,9 +260,9 @@ function handleCallReject(data, from) {
 function handleCallEnd(data, from) {
     const { to, callId } = data;
     console.log(`📴 Llamada terminada: ${from}`);
-    
+
     activeCalls.delete(callId);
-    
+
     const targetWs = wsConnections.get(to);
     if (targetWs && targetWs.readyState === WebSocket.OPEN) {
         targetWs.send(JSON.stringify({
@@ -287,7 +287,7 @@ app.post('/register', async (req, res) => {
     try {
         console.log(`📡 [Ice RPC] registerUser: ${username}`);
         const result = await iceBridge.callIceMethod('registerUser', { username });
-        
+
         // Notificar a TODOS los usuarios conectados que hay un nuevo usuario
         // Esto permite que las listas se actualicen en tiempo real
         wsConnections.forEach((ws, user) => {
@@ -303,7 +303,7 @@ app.post('/register', async (req, res) => {
                 }
             }
         });
-        
+
         res.json({ action: "REGISTERED", username, ...result });
     } catch (error) {
         console.error("Error en register:", error.message);
@@ -338,17 +338,17 @@ app.post('/createGroup', async (req, res) => {
     try {
         console.log(`📡 [Ice RPC] createGroup: ${groupName}`);
         const result = await iceBridge.callIceMethod('createGroup', { groupName });
-        
+
         // Notificar a todos los usuarios conectados via WebSocket
         wsConnections.forEach((ws) => {
             if (ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ 
-                    type: 'groupCreated', 
-                    groupName: groupName 
+                ws.send(JSON.stringify({
+                    type: 'groupCreated',
+                    groupName: groupName
                 }));
             }
         });
-        
+
         res.json({ action: "GROUP_CREATED", groupName, ...result });
     } catch (error) {
         console.error("Error en createGroup:", error.message);
@@ -361,11 +361,11 @@ app.post('/sendMessage', async (req, res) => {
     try {
         console.log(`📡 [Ice RPC] sendMessage: ${from} -> ${to}`);
         const result = await iceBridge.callIceMethod('sendMessage', { from, to, message, isGroup });
-        
+
         // El mensaje será notificado automáticamente via Ice callbacks (WebSocket bidireccional)
         // Los callbacks Ice invocan MessageCallbackI.onMessage() que envía via WebSocket del proxy
         // Si los callbacks no funcionan, el mensaje se perderá (pero se guardará en historial)
-        
+
         console.log(`✅ Mensaje enviado via Ice RPC, esperando callback...`);
         res.json({ action: "MESSAGE_SENT", ...result });
     } catch (error) {
@@ -379,10 +379,10 @@ app.post('/sendVoiceNote', async (req, res) => {
     try {
         console.log(`📡 [Ice RPC] sendAudio: ${from} -> ${to}`);
         const result = await iceBridge.callIceMethod('sendAudio', { from, to, audioData, isGroup });
-        
+
         // El mensaje será notificado automáticamente via Ice callbacks (WebSocket bidireccional)
         // Los callbacks Ice invocan MessageCallbackI.onMessage() que envía via WebSocket del proxy
-        
+
         res.json({ action: "VOICE_NOTE_SENT", ...result });
     } catch (error) {
         console.error("Error en sendVoiceNote:", error.message);
@@ -395,10 +395,10 @@ app.post('/startCall', async (req, res) => {
     try {
         console.log(`📡 [Ice RPC] startCall: ${from} -> ${to}`);
         const result = await iceBridge.callIceMethod('startCall', { from, to, isGroup });
-        
+
         // La notificación de llamada se manejará via Ice callbacks si está implementado
         // Por ahora, las llamadas usan WebRTC con señalización via WebSocket propio
-        
+
         res.json({ action: "CALL_STARTED", ...result });
     } catch (error) {
         console.error("Error en startCall:", error.message);
@@ -433,11 +433,11 @@ function setupIceMessageHandler() {
             const message = data.message;
             const targetUser = message.to;
             const isGroup = message.isGroup;
-            
+
             console.log(`📨 [Ice Callback] Mensaje recibido: ${message.from} -> ${targetUser} (grupo: ${isGroup})`);
             console.log(`   Contenido: ${message.message?.substring(0, 50) || message.content?.substring(0, 50) || 'N/A'}...`);
             console.log(`   Usuarios conectados: ${wsConnections.size}`);
-            
+
             // Asegurar que el mensaje tenga la estructura correcta
             const messageToSend = {
                 from: message.from || '',
@@ -448,7 +448,7 @@ function setupIceMessageHandler() {
                 type: message.type || 'text',
                 audioData: message.audioData || null
             };
-            
+
             // Enviar mensaje via WebSocket a los usuarios conectados
             if (isGroup) {
                 // Enviar a todos los usuarios conectados
@@ -474,7 +474,7 @@ function setupIceMessageHandler() {
                 // Mensaje directo: enviar al destinatario Y al remitente
                 let sentToTarget = false;
                 let sentToSender = false;
-                
+
                 // Enviar al destinatario
                 const targetWs = wsConnections.get(targetUser);
                 if (targetWs && targetWs.readyState === WebSocket.OPEN) {
@@ -494,7 +494,7 @@ function setupIceMessageHandler() {
                         console.log(`   Estado WebSocket: ${targetWs.readyState} (OPEN=${WebSocket.OPEN})`);
                     }
                 }
-                
+
                 // También enviar al remitente (para que vea su propio mensaje con timestamp del servidor)
                 const senderWs = wsConnections.get(messageToSend.from);
                 if (senderWs && senderWs.readyState === WebSocket.OPEN) {
@@ -514,7 +514,7 @@ function setupIceMessageHandler() {
                         console.log(`   Estado WebSocket: ${senderWs.readyState} (OPEN=${WebSocket.OPEN})`);
                     }
                 }
-                
+
                 console.log(`📊 Resumen: Destinatario=${sentToTarget ? '✅' : '❌'}, Remitente=${sentToSender ? '✅' : '❌'}`);
             }
         } else {
@@ -535,7 +535,7 @@ server.listen(PORT, async () => {
     console.log(`WebSocket server activo en ws://localhost:${PORT}`);
     console.log('===========================================');
     console.log('Conectando al servidor Ice...');
-    
+
     // Intentar conectar a Ice, pero no bloquear el inicio del servidor
     iceBridge.connect().then(() => {
         console.log('✅ Proxy listo - usando ZeroC Ice RPC');
@@ -546,7 +546,7 @@ server.listen(PORT, async () => {
         console.log('⚠️  El proxy continuará ejecutándose, pero las funciones Ice no estarán disponibles');
         console.log('⚠️  Inicie el servidor Java y reinicie el proxy para habilitar Ice RPC');
     });
-    
+
     console.log('===========================================');
     console.log('✅ Servidor HTTP listo y escuchando en puerto', PORT);
     console.log('===========================================');
