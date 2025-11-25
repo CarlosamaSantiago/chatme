@@ -19,6 +19,9 @@ const wss = new WebSocket.Server({ server });
 // Almacenar conexiones WebSocket por usuario
 const wsConnections = new Map();
 
+// Almacenar llamadas activas: { callId: { caller, callee, status } }
+const activeCalls = new Map();
+
 // Manejar conexiones WebSocket
 wss.on('connection', (ws, req) => {
     console.log('Nueva conexión WebSocket');
@@ -29,15 +32,46 @@ wss.on('connection', (ws, req) => {
         try {
             const data = JSON.parse(message);
             
-            if (data.type === 'register') {
-                username = data.username;
-                wsConnections.set(username, ws);
-                console.log(`Usuario WebSocket registrado: ${username}`);
+            switch (data.type) {
+                case 'register':
+                    username = data.username;
+                    wsConnections.set(username, ws);
+                    console.log(`Usuario WebSocket registrado: ${username}`);
+                    ws.send(JSON.stringify({ 
+                        type: 'registered', 
+                        username: username 
+                    }));
+                    break;
                 
-                ws.send(JSON.stringify({ 
-                    type: 'registered', 
-                    username: username 
-                }));
+                // === SEÑALIZACIÓN WEBRTC ===
+                
+                case 'call-offer':
+                    // Usuario A envía oferta SDP a Usuario B
+                    handleCallOffer(data, username);
+                    break;
+                
+                case 'call-answer':
+                    // Usuario B responde con SDP answer
+                    handleCallAnswer(data, username);
+                    break;
+                
+                case 'ice-candidate':
+                    // Intercambio de candidatos ICE
+                    handleIceCandidate(data, username);
+                    break;
+                
+                case 'call-reject':
+                    // Usuario rechaza la llamada
+                    handleCallReject(data, username);
+                    break;
+                
+                case 'call-end':
+                    // Usuario termina la llamada
+                    handleCallEnd(data, username);
+                    break;
+                
+                default:
+                    console.log('Tipo de mensaje WebSocket no reconocido:', data.type);
             }
         } catch (e) {
             console.error('Error procesando mensaje WebSocket:', e);
@@ -46,6 +80,22 @@ wss.on('connection', (ws, req) => {
     
     ws.on('close', () => {
         if (username) {
+            // Terminar llamadas activas del usuario
+            activeCalls.forEach((call, callId) => {
+                if (call.caller === username || call.callee === username) {
+                    const otherUser = call.caller === username ? call.callee : call.caller;
+                    const otherWs = wsConnections.get(otherUser);
+                    if (otherWs && otherWs.readyState === WebSocket.OPEN) {
+                        otherWs.send(JSON.stringify({
+                            type: 'call-ended',
+                            from: username,
+                            reason: 'user_disconnected'
+                        }));
+                    }
+                    activeCalls.delete(callId);
+                }
+            });
+            
             wsConnections.delete(username);
             console.log(`Usuario WebSocket desconectado: ${username}`);
         }
@@ -55,6 +105,103 @@ wss.on('connection', (ws, req) => {
         console.error('Error WebSocket:', error);
     });
 });
+
+// === Funciones de señalización WebRTC ===
+
+function handleCallOffer(data, from) {
+    const { to, offer, isGroup } = data;
+    console.log(`📞 Oferta de llamada: ${from} -> ${to}`);
+    
+    const targetWs = wsConnections.get(to);
+    if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+        // Crear ID de llamada
+        const callId = `${from}_${to}_${Date.now()}`;
+        activeCalls.set(callId, { caller: from, callee: to, status: 'ringing' });
+        
+        targetWs.send(JSON.stringify({
+            type: 'call-offer',
+            from: from,
+            to: to,
+            offer: offer,
+            callId: callId,
+            isGroup: isGroup
+        }));
+    } else {
+        // Usuario no disponible
+        const callerWs = wsConnections.get(from);
+        if (callerWs && callerWs.readyState === WebSocket.OPEN) {
+            callerWs.send(JSON.stringify({
+                type: 'call-failed',
+                to: to,
+                reason: 'user_unavailable'
+            }));
+        }
+    }
+}
+
+function handleCallAnswer(data, from) {
+    const { to, answer, callId } = data;
+    console.log(`✅ Respuesta de llamada: ${from} -> ${to}`);
+    
+    const call = activeCalls.get(callId);
+    if (call) {
+        call.status = 'connected';
+    }
+    
+    const targetWs = wsConnections.get(to);
+    if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+        targetWs.send(JSON.stringify({
+            type: 'call-answer',
+            from: from,
+            answer: answer,
+            callId: callId
+        }));
+    }
+}
+
+function handleIceCandidate(data, from) {
+    const { to, candidate } = data;
+    
+    const targetWs = wsConnections.get(to);
+    if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+        targetWs.send(JSON.stringify({
+            type: 'ice-candidate',
+            from: from,
+            candidate: candidate
+        }));
+    }
+}
+
+function handleCallReject(data, from) {
+    const { to, callId } = data;
+    console.log(`❌ Llamada rechazada: ${from} rechazó llamada de ${to}`);
+    
+    activeCalls.delete(callId);
+    
+    const targetWs = wsConnections.get(to);
+    if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+        targetWs.send(JSON.stringify({
+            type: 'call-rejected',
+            from: from
+        }));
+    }
+}
+
+function handleCallEnd(data, from) {
+    const { to, callId } = data;
+    console.log(`📴 Llamada terminada: ${from}`);
+    
+    activeCalls.delete(callId);
+    
+    const targetWs = wsConnections.get(to);
+    if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+        targetWs.send(JSON.stringify({
+            type: 'call-ended',
+            from: from,
+            reason: 'call_ended'
+        }));
+    }
+}
 
 // Función para enviar mensajes en tiempo real
 function broadcastMessage(message, targetUser, isGroup, senderUser) {

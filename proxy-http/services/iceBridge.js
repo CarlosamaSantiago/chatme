@@ -13,7 +13,7 @@ class IceBridge {
             'registerUser': 'REGISTER',
             'createGroup': 'CREATE_GROUP',
             'sendMessage': 'SEND_MESSAGE',
-            'sendAudio': 'SEND_VOICE_NOTE',
+            'sendAudio': 'SEND_AUDIO',
             'sendVoiceNote': 'SEND_VOICE_NOTE',
             'startCall': 'START_CALL',
             'getHistory': 'GET_HISTORY',
@@ -43,20 +43,33 @@ class IceBridge {
                 };
                 break;
             case 'sendAudio':
+                // Para sendAudio (interfaz ICE), orden: from, to, data, isGroup
+                let audioDataIce = params.data || params.audioData;
+                if (Array.isArray(audioDataIce)) {
+                    const bytes = new Uint8Array(audioDataIce);
+                    audioDataIce = Buffer.from(bytes).toString('base64');
+                }
+                jsonPayload = { 
+                    action: 'SEND_AUDIO', 
+                    from: params.from, 
+                    to: params.to, 
+                    audioData: audioDataIce,
+                    isGroup: params.isGroup
+                };
+                break;
             case 'sendVoiceNote':
-                // Para notas de voz, enviar audioData en Base64
+                // Para sendVoiceNote (endpoint HTTP), orden: from, to, audioData, isGroup
                 let audioData = params.audioData || params.data;
                 if (Array.isArray(audioData)) {
-                    // Si es un array de bytes, convertir a Base64
                     const bytes = new Uint8Array(audioData);
                     audioData = Buffer.from(bytes).toString('base64');
                 }
                 jsonPayload = { 
-                    action, 
+                    action: 'SEND_VOICE_NOTE', 
                     from: params.from, 
                     to: params.to, 
-                    isGroup: params.isGroup,
-                    audioData: audioData
+                    audioData: audioData,
+                    isGroup: params.isGroup
                 };
                 break;
             case 'startCall':
