@@ -1,115 +1,133 @@
-# Instrucciones de Ejecución - Proyecto Chat con Ice
+# Instrucciones de Ejecución - Chat RPC
 
-## ⚠️ IMPORTANTE: Pasos Previos
+## Requisitos
 
-Antes de ejecutar el proyecto, asegúrate de:
+- **Java 17+** con Gradle
+- **Node.js 18+** con npm
+- **ZeroC Ice** (opcional, para endpoints Ice)
 
-1. **Tener ZeroC Ice instalado**
-   - Descargar desde: https://zeroc.com/downloads/ice
-   - Agregar `bin` al PATH del sistema
-   - Verificar: `slice2java --version`
+## Arquitectura
 
-2. **Compilar los archivos .ice PRIMERO**
-   ```bash
-   cd servidor-java
-   .\gradlew compileSlice
-   ```
-   
-   Esto generará los archivos Java en `src/main/generated/Chat/`
+```
+┌─────────────────┐     HTTP/WS      ┌─────────────────┐     TCP/5000     ┌─────────────────┐
+│   Cliente Web   │ ←──────────────→ │   Proxy HTTP    │ ←──────────────→ │  Servidor Java  │
+│   (Webpack)     │    :3000         │   (Express+WS)  │                  │    (Ice RPC)    │
+└─────────────────┘                  └─────────────────┘                  └─────────────────┘
+```
 
-## 🚀 Ejecución Paso a Paso
-
-### 1. Compilar Proyecto Java
+## Paso 1: Iniciar el Servidor Java
 
 ```bash
 cd servidor-java
-.\gradlew build
+
+# Windows
+gradlew.bat run
+
+# Linux/Mac
+./gradlew run
 ```
 
-Si hay errores, verifica que:
-- Los archivos en `src/main/generated/Chat/` existan
-- Si no existen, ejecuta `.\gradlew compileSlice` primero
+El servidor iniciará en:
+- **Puerto 5000**: TCP para el proxy HTTP
+- **Puerto 10000**: WebSocket para clientes Ice directos
 
-### 2. Iniciar Servidor Ice
-
-```bash
-cd servidor-java
-.\gradlew run
-```
-
-Deberías ver:
-```
-===========================================
-Servidor Ice de Chat iniciado
-WebSocket endpoint: ws://localhost:10000
-===========================================
-```
-
-**Mantén esta terminal abierta**
-
-### 3. Iniciar Proxy HTTP (Nueva Terminal)
+## Paso 2: Iniciar el Proxy HTTP
 
 ```bash
 cd proxy-http
-npm install  # Solo la primera vez
-node index.js
+
+# Instalar dependencias
+npm install
+
+# Iniciar el proxy
+npm start
 ```
 
-Deberías ver:
-```
-Proxy HTTP en puerto 3000 (con soporte Ice RPC)
-```
+El proxy estará disponible en:
+- **http://localhost:3000**: API REST
+- **ws://localhost:3000**: WebSocket para tiempo real
 
-**Mantén esta terminal abierta**
-
-### 4. Compilar y Ejecutar Cliente Web (Nueva Terminal)
+## Paso 3: Compilar y Servir el Cliente Web
 
 ```bash
 cd cliente-web
-npm install  # Solo la primera vez
+
+# Instalar dependencias
+npm install
+
+# Compilar con Webpack
 npm run build
+
+# Servir el cliente
 npm run serve
 ```
 
-O simplemente abre `cliente-web/dist/index.html` en tu navegador.
+El cliente estará disponible en **http://localhost:3000** (si usas serve) o **http://localhost:5000**
 
-## 🔍 Verificación
+## Funcionalidades Implementadas
 
-1. **Servidor Ice**: Debe estar escuchando en puerto 10000 (WebSocket)
-2. **Proxy HTTP**: Debe estar en puerto 3000
-3. **Cliente**: Debe abrirse en el navegador
+### ✅ Requerimientos Funcionales
 
-## 🐛 Si No Funciona
+| Funcionalidad | Estado | Descripción |
+|--------------|--------|-------------|
+| Crear grupos de chat | ✅ | Vía RPC `createGroup` |
+| Enviar mensajes de texto | ✅ | Tiempo real vía WebSocket |
+| Visualizar historial | ✅ | Mensajes de texto y audio |
+| Notas de voz | ✅ | Grabación y envío vía WebSocket |
+| Llamadas | ✅ | Notificación vía WebSocket + WebRTC |
 
-### Error: "Chat.* cannot be resolved"
-**Solución**: Ejecuta `.\gradlew compileSlice` primero
+### ✅ Requerimientos Técnicos
 
-### Error: "slice2java not found"
-**Solución**: Instala Ice y agrega al PATH
+| Requisito | Estado | Implementación |
+|-----------|--------|----------------|
+| HTML, CSS, JS Vanilla | ✅ | Sin frameworks |
+| Webpack | ✅ | Empaquetado del cliente |
+| RPC (ZeroC Ice) | ✅ | Servidor Java con endpoints Ice |
+| HTTP Express | ✅ | Proxy HTTP con endpoints REST |
+| WebSocket | ✅ | Tiempo real para mensajes y llamadas |
 
-### Error: "Port already in use"
-**Solución**: Cierra otros procesos usando puertos 3000, 5000 o 10000
+## Endpoints del Proxy HTTP
 
-### El cliente no se conecta
-**Solución**: 
-1. Verifica que el servidor Ice esté corriendo
-2. Verifica que el proxy HTTP esté corriendo
-3. Revisa la consola del navegador (F12) para errores
+### API REST
 
-## 📝 Notas
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| POST | `/register` | Registrar usuario |
+| POST | `/createGroup` | Crear grupo |
+| POST | `/sendMessage` | Enviar mensaje de texto |
+| POST | `/sendVoiceNote` | Enviar nota de voz |
+| POST | `/startCall` | Iniciar llamada |
+| POST | `/getHistory` | Obtener historial |
+| POST | `/getUsers` | Listar usuarios |
+| POST | `/getGroups` | Listar grupos |
 
-- El servidor original (puerto 5000) sigue funcionando para compatibilidad
-- El servidor Ice usa WebSockets en puerto 10000
-- El proxy HTTP traduce llamadas HTTP a formato compatible
-- Las notas de voz requieren permisos de micrófono en el navegador
+### WebSocket
 
-## ✅ Checklist de Ejecución
+Conectar a `ws://localhost:3000`
 
-- [ ] Ice instalado y en PATH
-- [ ] Archivos .ice compilados (`compileSlice`)
-- [ ] Proyecto Java compilado (`build`)
-- [ ] Servidor Ice ejecutándose
-- [ ] Proxy HTTP ejecutándose
-- [ ] Cliente web abierto en navegador
-- [ ] Permisos de micrófono otorgados (para notas de voz)
+**Mensajes entrantes:**
+```json
+{ "type": "register", "username": "nombre" }
+```
 
+**Mensajes salientes:**
+```json
+{ "type": "newMessage", "message": {...} }
+{ "type": "incomingCall", "from": "usuario", "to": "destinatario" }
+{ "type": "groupCreated", "groupName": "nombre" }
+```
+
+## Flujo de Comunicación
+
+1. **Registro de usuario**: Cliente → Proxy → Servidor Java
+2. **Conexión WebSocket**: Cliente ↔ Proxy (tiempo real)
+3. **Envío de mensaje**: Cliente → Proxy → Servidor → Proxy → WebSocket → Clientes
+4. **Nota de voz**: Grabación → Base64 → Proxy → Servidor → Historial
+5. **Llamadas**: Notificación vía WebSocket + MediaStream local
+
+## Notas Técnicas
+
+- Los mensajes se almacenan en `data/history.json`
+- Los audios se guardan en Base64 dentro del historial
+- El polling de usuarios se realiza cada 10 segundos
+- La reconexión WebSocket es automática (hasta 5 intentos)

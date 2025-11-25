@@ -1,24 +1,20 @@
 // Bridge para convertir llamadas HTTP a Ice RPC
-// Nota: En una implementación completa, esto usaría el cliente Ice de Node.js
-// Por ahora, creamos un bridge que se comunica con el servidor Java
+// Se comunica con el servidor Java via TCP socket
 
 class IceBridge {
     constructor() {
-        // El bridge se comunica con el servidor Java vía TCP socket
+        this.SERVER_HOST = 'localhost';
+        this.SERVER_PORT = 5000;
     }
 
     async callIceMethod(method, params) {
-        // Por ahora, usamos el servidor Java original como fallback
-        // En una implementación completa, esto haría llamadas RPC directas a Ice
-        // usando el cliente Ice de Node.js
-        
         // Convertir la llamada Ice a formato JSON para el servidor
         const actionMap = {
             'registerUser': 'REGISTER',
             'createGroup': 'CREATE_GROUP',
             'sendMessage': 'SEND_MESSAGE',
             'sendAudio': 'SEND_VOICE_NOTE',
-            'sendVoiceNote': 'SEND_VOICE_NOTE', // Alias para compatibilidad
+            'sendVoiceNote': 'SEND_VOICE_NOTE',
             'startCall': 'START_CALL',
             'getHistory': 'GET_HISTORY',
             'getUsers': 'GET_USERS',
@@ -48,13 +44,19 @@ class IceBridge {
                 break;
             case 'sendAudio':
             case 'sendVoiceNote':
-                // Para notas de voz, necesitamos enviar los datos de audio
+                // Para notas de voz, enviar audioData en Base64
+                let audioData = params.audioData || params.data;
+                if (Array.isArray(audioData)) {
+                    // Si es un array de bytes, convertir a Base64
+                    const bytes = new Uint8Array(audioData);
+                    audioData = Buffer.from(bytes).toString('base64');
+                }
                 jsonPayload = { 
                     action, 
                     from: params.from, 
                     to: params.to, 
                     isGroup: params.isGroup,
-                    audioData: params.audioData || params.data
+                    audioData: audioData
                 };
                 break;
             case 'startCall':
@@ -69,7 +71,7 @@ class IceBridge {
                 jsonPayload = { 
                     action, 
                     target: params.target, 
-                    from: params.fromUser, 
+                    from: params.fromUser || params.from, 
                     isGroup: params.isGroup 
                 };
                 break;
@@ -83,25 +85,28 @@ class IceBridge {
                 throw new Error(`Método Ice no soportado: ${method}`);
         }
 
-        // Llamar al servidor Java (que ahora puede ser el servidor Ice)
+        return this.sendToServer(jsonPayload, method);
+    }
+
+    sendToServer(jsonPayload, method) {
         const net = require('net');
-        const SERVER_HOST = 'localhost';
-        const SERVER_PORT = 5000; // Puerto del servidor Java original
         
         return new Promise((resolve, reject) => {
             const client = new net.Socket();
             let data = '';
+            let timeoutId;
 
-            client.connect(SERVER_PORT, SERVER_HOST, () => {
-                client.write(JSON.stringify(jsonPayload) + '\n');
+            client.connect(this.SERVER_PORT, this.SERVER_HOST, () => {
+                const payload = JSON.stringify(jsonPayload);
+                client.write(payload + '\n');
             });
 
             client.on('data', chunk => {
                 data += chunk.toString();
                 if (data.includes('\n')) {
+                    clearTimeout(timeoutId);
                     try {
                         const response = JSON.parse(data.trim());
-                        // Convertir respuesta al formato esperado por el frontend
                         resolve(this.formatResponse(method, response));
                     } catch (e) {
                         resolve({ success: true, data: data.trim() });
@@ -111,23 +116,27 @@ class IceBridge {
             });
 
             client.on('error', err => {
+                clearTimeout(timeoutId);
                 reject(err);
             });
 
-            // Timeout
-            setTimeout(() => {
+            client.on('close', () => {
+                clearTimeout(timeoutId);
+            });
+
+            // Timeout de 30 segundos para permitir audio grande
+            timeoutId = setTimeout(() => {
                 if (!client.destroyed) {
                     client.destroy();
                     reject(new Error('Timeout en llamada Ice'));
                 }
-            }, 10000);
+            }, 30000);
         });
     }
 
     formatResponse(method, response) {
         switch (method) {
             case 'getHistory':
-                // Convertir mensajes del formato del servidor al formato esperado
                 if (response.messages) {
                     return { messages: response.messages };
                 }
@@ -143,4 +152,3 @@ class IceBridge {
 }
 
 module.exports = new IceBridge();
-

@@ -1,113 +1,137 @@
-# Cambios Aplicados para Corregir el Proyecto
+# Cambios Aplicados para Cumplir Requerimientos
 
-## Problemas Identificados y Solucionados
+## Resumen de Cambios
 
-### 1. ✅ Servidor Ice - Múltiples Endpoints
-**Problema**: El servidor Ice solo escuchaba en WebSocket (puerto 10000), pero el proxy HTTP necesita TCP (puerto 5000).
+### 1. Proxy HTTP (`proxy-http/`)
 
-**Solución**: 
-- El servidor Ice ahora inicia automáticamente el servidor original en un thread separado
-- El servidor original escucha en puerto 5000 (TCP) para el proxy HTTP
-- El servidor Ice escucha en puerto 10000 (WebSocket) para conexiones directas
+#### `index.js` - Servidor WebSocket agregado
+- ✅ Agregado servidor WebSocket usando la librería `ws`
+- ✅ Manejo de conexiones WebSocket por usuario
+- ✅ Función `broadcastMessage()` para enviar mensajes en tiempo real
+- ✅ Función `notifyCall()` para notificar llamadas entrantes
+- ✅ Nuevo endpoint `/sendVoiceNote` para notas de voz
+- ✅ Nuevo endpoint `/startCall` para iniciar llamadas
+- ✅ Notificación de grupos creados vía WebSocket
 
-**Archivo modificado**: `servidor-java/src/main/java/com/chat/servidor/IceChatServer.java`
+#### `package.json`
+- ✅ Agregada dependencia `ws: ^8.18.0`
+- ✅ Agregados scripts `start` y `dev`
 
-### 2. ✅ Frontend - Comunicación HTTP
-**Problema**: El frontend intentaba usar WebSocket directamente y endpoints `/ice/*` que no funcionaban correctamente.
+#### `services/iceBridge.js`
+- ✅ Mejorado manejo de datos de audio (conversión a Base64)
+- ✅ Timeout aumentado a 30 segundos para audio grande
 
-**Solución**:
-- El frontend ahora usa los endpoints HTTP normales (`/register`, `/sendMessage`, etc.)
-- Se eliminó la conexión WebSocket directa (se usa polling en su lugar)
-- Se mejoró el mapeo de métodos Ice a endpoints HTTP
-- Se agregó manejo robusto de errores y diferentes formatos de respuesta
+### 2. Cliente Web (`cliente-web/`)
 
-**Archivo modificado**: `cliente-web/src/chat.js`
+#### `src/chat.js` - WebSocket y mejoras
+- ✅ Implementada conexión WebSocket para tiempo real
+- ✅ Eliminado polling para mensajes (ahora usa WebSocket)
+- ✅ Reconexión automática (hasta 5 intentos)
+- ✅ `sendVoiceNote()` - Grabación y envío de notas de voz
+  - Usa MediaRecorder API
+  - Convierte audio a Base64
+  - Límite de 60 segundos de grabación
+- ✅ `startCall()` / `joinCall()` / `endCall()` - Manejo de llamadas
+  - Acceso a cámara y micrófono
+  - Notificación vía WebSocket
+- ✅ Indicador de estado de conexión
+- ✅ Notificación de nuevos mensajes en título de página
+- ✅ Mejor manejo de visualización de audios
+- ✅ Evitar duplicación de mensajes en tiempo real
 
-### 3. ✅ Proxy HTTP - Compatibilidad
-**Problema**: El proxy intentaba usar módulo `ws` que no estaba instalado.
+#### `index.html`
+- ✅ Agregado indicador de estado de conexión (`#connectionStatus`)
+- ✅ Mejorada estructura para llamadas (video element)
+- ✅ Mensaje de bienvenida cuando no hay chat seleccionado
 
-**Solución**:
-- Se eliminó la dependencia innecesaria de `ws`
-- El proxy ahora se comunica correctamente con el servidor original vía TCP
+#### `chat.css`
+- ✅ Nuevo diseño con fuente Poppins
+- ✅ Esquema de colores tipo WhatsApp
+- ✅ Variables CSS para tema consistente
+- ✅ Estilos para `.status-connected` y `.status-disconnected`
+- ✅ Estilos para mensajes de audio y llamadas
+- ✅ Animación de entrada para mensajes
+- ✅ Scrollbar personalizado
+- ✅ Diseño responsive
 
-**Archivo modificado**: `proxy-http/services/iceBridge.js`
+#### `webpack.config.js`
+- ✅ Agregado `clean: true` para limpiar dist
+- ✅ Configuración de webpack-dev-server
 
-### 4. ✅ Frontend - Manejo de Datos
-**Problema**: El frontend no manejaba correctamente los diferentes formatos de respuesta del servidor.
+#### `package.json`
+- ✅ Removida dependencia innecesaria de `ice`
+- ✅ Agregado `webpack-dev-server`
+- ✅ Script `start` para build + serve
 
-**Solución**:
-- Se mejoró `displayHistory` para manejar strings JSON y objetos
-- Se agregó manejo de errores en el parsing de mensajes
-- Se inicializó correctamente `pollingInterval`
-- Se mejoró el mapeo de parámetros entre frontend y backend
+### 3. Servidor Java (`servidor-java/`)
 
-**Archivo modificado**: `cliente-web/src/chat.js`
+#### `ClientHandler.java`
+- ✅ Nuevo método `extractAudioData()` para manejar datos Base64 grandes
+- ✅ Mejorado `handleSendVoiceNote()` con timestamps numéricos
+- ✅ Logging del tamaño de audio recibido
 
-## Flujo de Comunicación Actual
+## Flujo de Datos Actualizado
 
-1. **Frontend** → HTTP → **Proxy HTTP** (puerto 3000)
-2. **Proxy HTTP** → TCP Socket → **Servidor Original** (puerto 5000)
-3. **Servidor Original** → Comparte datos con **Servidor Ice** (misma memoria)
-4. **Servidor Ice** → WebSocket (puerto 10000) - disponible para conexiones directas
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         FRONTEND                                 │
+│                                                                 │
+│  ┌─────────┐    WebSocket     ┌─────────┐    HTTP POST         │
+│  │ chat.js │ ←──────────────→ │ Proxy   │ ←────────────────→   │
+│  │         │   (tiempo real)  │ :3000   │   (RPC delegado)     │
+│  └─────────┘                  └─────────┘                       │
+└─────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ TCP Socket
+                                    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                         BACKEND                                  │
+│                                                                 │
+│  ┌─────────────────┐          ┌─────────────────┐              │
+│  │  ChatServer     │          │  IceChatServer  │              │
+│  │  (TCP :5000)    │          │  (WS :10000)    │              │
+│  │                 │          │  (Ice RPC)      │              │
+│  └─────────────────┘          └─────────────────┘              │
+│           │                            │                        │
+│           └──────────┬─────────────────┘                        │
+│                      ▼                                          │
+│           ┌─────────────────────┐                               │
+│           │   HistoryManager    │                               │
+│           │   (data/history.json)│                              │
+│           └─────────────────────┘                               │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-## Cómo Ejecutar
+## Requerimientos Cumplidos
 
-### 1. Compilar y Ejecutar Servidor
+| Requerimiento | Estado | Implementación |
+|--------------|--------|----------------|
+| Crear grupos de chat | ✅ | `POST /createGroup` + notificación WS |
+| Mensajes de texto (tiempo real) | ✅ | WebSocket `newMessage` |
+| Historial de mensajes | ✅ | `POST /getHistory` |
+| Historial de audios | ✅ | Audios en Base64 en historial |
+| Notas de voz | ✅ | MediaRecorder + WebSocket |
+| Llamadas | ✅ | WebSocket + MediaDevices API |
+| Cliente HTML/CSS/JS Vanilla | ✅ | Sin frameworks |
+| Webpack | ✅ | Empaquetado en `dist/` |
+| RPC ZeroC Ice | ✅ | Servidor Ice en puerto 10000 |
+| HTTP Express | ✅ | Proxy en puerto 3000 |
+
+## Comandos de Ejecución
+
 ```bash
+# Terminal 1 - Servidor Java
 cd servidor-java
-.\gradlew.bat build
-.\gradlew.bat run
-```
+./gradlew run
 
-Esto iniciará:
-- Servidor Ice en WebSocket puerto 10000
-- Servidor Original en TCP puerto 5000 (automáticamente)
-
-### 2. Ejecutar Proxy HTTP
-```bash
+# Terminal 2 - Proxy HTTP
 cd proxy-http
-node index.js
-```
+npm install
+npm start
 
-### 3. Compilar y Ejecutar Frontend
-```bash
+# Terminal 3 - Cliente Web
 cd cliente-web
-npm run build
-npm run serve
-# O abrir dist/index.html en el navegador
+npm install
+npm start
+# Abrir http://localhost:8080
 ```
-
-## Endpoints Disponibles
-
-### Proxy HTTP (puerto 3000)
-- `POST /register` - Registrar usuario
-- `POST /getUsers` - Obtener lista de usuarios
-- `POST /getGroups` - Obtener lista de grupos
-- `POST /createGroup` - Crear grupo
-- `POST /sendMessage` - Enviar mensaje
-- `POST /getHistory` - Obtener historial
-
-### Servidor Original (puerto 5000)
-- Maneja conexiones TCP con protocolo JSON simple
-- Compatible con el proxy HTTP
-
-### Servidor Ice (puerto 10000)
-- WebSocket endpoint para conexiones directas
-- RPC mediante ZeroC Ice
-
-## Notas Importantes
-
-1. **Ambos servidores comparten la misma memoria**: Los datos se comparten entre el servidor original y el servidor Ice porque ambos usan las mismas estructuras estáticas de `ChatServer`.
-
-2. **Polling en lugar de WebSocket**: Por simplicidad, el frontend usa polling cada 2 segundos para actualizar mensajes. Esto se puede cambiar a WebSocket real más adelante.
-
-3. **Compatibilidad**: El sistema mantiene compatibilidad con el servidor original mientras agrega funcionalidad Ice.
-
-## Próximos Pasos (Opcional)
-
-1. Implementar WebSocket real en el frontend para notificaciones en tiempo real
-2. Migrar completamente a Ice RPC eliminando el servidor original
-3. Agregar autenticación y seguridad
-4. Mejorar el manejo de errores y reconexión
-
-

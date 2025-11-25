@@ -5,7 +5,8 @@ module.exports = {
   entry: './src/chat.js',
   output: {
     path: path.resolve(__dirname, 'dist'),
-    filename: 'chat.js'
+    filename: 'chat.js',
+    clean: true
   },
   mode: 'development',
   devtool: 'source-map',
@@ -24,6 +25,11 @@ module.exports = {
       "buffer": false,
       "util": false
     }
+  },
+  devServer: {
+    static: './dist',
+    port: 8080,
+    open: true
   }
 };
 

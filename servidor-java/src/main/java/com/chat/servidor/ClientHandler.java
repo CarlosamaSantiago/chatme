@@ -215,14 +215,15 @@ public class ClientHandler implements Runnable {
         String to = extractValue(message, "to");
         String isGroupStr = extractValue(message, "isGroup");
         boolean isGroup = "true".equals(isGroupStr);
-        String audioDataStr = extractValue(message, "audioData");
+        // Extraer audioData usando método especial para datos largos
+        String audioDataStr = extractAudioData(message);
 
-        if (from != null && to != null && audioDataStr != null) {
-            String timestamp = new Date().toString();
+        if (from != null && to != null && audioDataStr != null && !audioDataStr.isEmpty()) {
+            long timestamp = System.currentTimeMillis();
             String messageJson = "{\"from\":\"" + escapeJson(from) + "\",\"to\":\"" +
                     escapeJson(to) + "\",\"message\":\"[Nota de voz]\",\"timestamp\":\"" + 
                     timestamp + "\",\"isGroup\":" + isGroup + ",\"type\":\"audio\",\"audioData\":\"" +
-                    escapeJson(audioDataStr) + "\"}";
+                    audioDataStr + "\"}";
 
             String historyKey;
             if (isGroup) {
@@ -236,10 +237,37 @@ public class ClientHandler implements Runnable {
             ChatServer.getHistorial().computeIfAbsent(historyKey, k -> new ArrayList<>()).add(messageJson);
             HistoryManager.saveHistory(ChatServer.getHistorial(), ChatServer.getGrupos());
 
-            System.out.println("Nota de voz de " + from + " a " + to);
-            enviarRespuesta("{\"action\":\"VOICE_NOTE_SENT\",\"message\":" + messageJson + "}");
+            System.out.println("Nota de voz de " + from + " a " + to + " (size: " + audioDataStr.length() + " chars)");
+            enviarRespuesta("{\"action\":\"VOICE_NOTE_SENT\",\"success\":true}");
         } else {
             enviarRespuesta("{\"error\":\"Datos incompletos para enviar nota de voz\"}");
+        }
+    }
+
+    private String extractAudioData(String json) {
+        try {
+            String searchKey = "\"audioData\":\"";
+            int start = json.indexOf(searchKey);
+            if (start == -1) return null;
+            
+            start += searchKey.length();
+            
+            // Buscar el cierre de la cadena, manejando escapes
+            int end = start;
+            while (end < json.length()) {
+                char c = json.charAt(end);
+                if (c == '"' && json.charAt(end - 1) != '\\') {
+                    break;
+                }
+                end++;
+            }
+            
+            if (end >= json.length()) return null;
+            
+            return json.substring(start, end);
+        } catch (Exception e) {
+            System.err.println("Error extrayendo audioData: " + e.getMessage());
+            return null;
         }
     }
 
