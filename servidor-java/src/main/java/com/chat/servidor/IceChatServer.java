@@ -11,6 +11,8 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.text.SimpleDateFormat;
 import java.util.Base64;
+import java.net.*;
+import java.io.*;
 
 public class IceChatServer {
     
@@ -34,6 +36,7 @@ public class IceChatServer {
                 iceHost = "0.0.0.0"; // Por defecto escuchar en todas las interfaces
             }
             
+            // Puerto asignado por Render
             String portStr = System.getenv("PORT");
             int port = 10000; // Puerto por defecto
             if (portStr != null && !portStr.isEmpty()) {
@@ -44,7 +47,7 @@ public class IceChatServer {
                 }
             }
             
-            // Crear adaptador de objetos Ice con endpoint WebSocket
+            // Crear adaptador de objetos Ice con endpoint WebSocket en el puerto de Render
             String endpoint = "ws -h " + iceHost + " -p " + port;
             ObjectAdapter adapter = communicator.createObjectAdapterWithEndpoints(
                 "ChatAdapter", 
@@ -60,6 +63,9 @@ public class IceChatServer {
             System.out.println("Servidor Ice de Chat iniciado");
             System.out.println("WebSocket endpoint: ws://" + iceHost + ":" + port);
             System.out.println("===========================================");
+            
+            // Iniciar servidor HTTP simple para que Render detecte el servicio
+            startHttpServer(port);
             
             // Esperar hasta que se cierre
             communicator.waitForShutdown();
@@ -82,6 +88,43 @@ public class IceChatServer {
         }
         
         System.exit(status);
+    }
+    
+    // Servidor HTTP simple para health check de Render
+    private static void startHttpServer(int port) {
+        new Thread(() -> {
+            try {
+                ServerSocket httpServer = new ServerSocket(port);
+                System.out.println("✅ Servidor HTTP iniciado en puerto " + port + " (para Render health check)");
+                
+                while (true) {
+                    Socket client = httpServer.accept();
+                    new Thread(() -> {
+                        try {
+                            BufferedReader in = new BufferedReader(new InputStreamReader(client.getInputStream()));
+                            PrintWriter out = new PrintWriter(client.getOutputStream(), true);
+                            
+                            // Leer request
+                            String line = in.readLine();
+                            
+                            // Responder con HTTP 200 OK
+                            out.println("HTTP/1.1 200 OK");
+                            out.println("Content-Type: text/plain");
+                            out.println("Connection: close");
+                            out.println();
+                            out.println("ChatMe Ice Server - Running");
+                            
+                            client.close();
+                        } catch (IOException e) {
+                            // Ignorar errores de cliente individual
+                        }
+                    }).start();
+                }
+            } catch (IOException e) {
+                System.err.println("⚠️  No se pudo iniciar servidor HTTP en puerto " + port + ": " + e.getMessage());
+                System.err.println("⚠️  El servidor Ice seguirá funcionando, pero Render puede no detectarlo");
+            }
+        }).start();
     }
     
     // Implementación del servicio de chat

@@ -28,7 +28,10 @@ services:
           type: web
           property: host
       - key: ICE_SERVER_PORT
-        value: 10000
+        fromService:
+          name: chatme-java-server
+          type: web
+          property: port
     healthCheckPath: /
     plan: free
 

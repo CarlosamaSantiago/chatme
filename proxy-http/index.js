@@ -528,8 +528,12 @@ function setupIceMessageHandler() {
 setupIceMessageHandler();
 
 // Iniciar servidor y conectar a Ice
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, async () => {
+const PORT = parseInt(process.env.PORT || '3000', 10);
+if (isNaN(PORT)) {
+    console.error('❌ PORT inválido:', process.env.PORT);
+    process.exit(1);
+}
+server.listen(PORT, '0.0.0.0', async () => {
     console.log('===========================================');
     console.log(`Proxy HTTP en puerto ${PORT}`);
     console.log(`WebSocket server activo en ws://localhost:${PORT}`);
