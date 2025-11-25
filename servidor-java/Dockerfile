@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y \
 RUN ./gradlew build --no-daemon
 
 # Imagen de runtime
-FROM openjdk:17-jre-slim
+FROM eclipse-temurin:17-jre-jammy
 
 WORKDIR /app
 
