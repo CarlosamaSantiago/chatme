@@ -10,10 +10,7 @@ const Chat = ChatModule.Chat;
 
 class IceBridge {
     constructor() {
-        // Usar variables de entorno o valores por defecto
-        const iceHost = process.env.ICE_SERVER_HOST || 'localhost';
-        const icePort = process.env.ICE_SERVER_PORT || '10000';
-        this.ICE_ENDPOINT = `ws -h ${iceHost} -p ${icePort}`;
+        this.ICE_ENDPOINT = 'ws -h 192.168.131.133 -p 10000';
         this.SERVICE_NAME = 'ChatService';
         this.communicator = null;
         this.chatService = null;

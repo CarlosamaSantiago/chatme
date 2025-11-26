@@ -28,27 +28,10 @@ public class IceChatServer {
             // Inicializar Ice
             communicator = Util.initialize(args);
             
-            // Obtener configuración de variables de entorno
-            String iceHost = System.getenv("ICE_HOST");
-            if (iceHost == null || iceHost.isEmpty()) {
-                iceHost = "0.0.0.0"; // Por defecto escuchar en todas las interfaces
-            }
-            
-            String portStr = System.getenv("PORT");
-            int port = 10000; // Puerto por defecto
-            if (portStr != null && !portStr.isEmpty()) {
-                try {
-                    port = Integer.parseInt(portStr);
-                } catch (NumberFormatException e) {
-                    System.err.println("⚠️  PORT inválido, usando puerto por defecto 10000");
-                }
-            }
-            
-            // Crear adaptador de objetos Ice con endpoint WebSocket
-            String endpoint = "ws -h " + iceHost + " -p " + port;
+            // Crear adaptador de objetos Ice con endpoint WebSocket (puerto 10000)
             ObjectAdapter adapter = communicator.createObjectAdapterWithEndpoints(
                 "ChatAdapter", 
-                endpoint
+                "ws -h 192.168.131.133 -p 10000"
             );
             
             // Crear y activar el servidor
@@ -58,7 +41,7 @@ public class IceChatServer {
             
             System.out.println("===========================================");
             System.out.println("Servidor Ice de Chat iniciado");
-            System.out.println("WebSocket endpoint: ws://" + iceHost + ":" + port);
+            System.out.println("WebSocket endpoint: ws://localhost:10000");
             System.out.println("===========================================");
             
             // Esperar hasta que se cierre
